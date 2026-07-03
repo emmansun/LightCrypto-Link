@@ -9,7 +9,7 @@
         <Or>
             <Class name="io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata"/>
             <Class name="io.github.emmansun.lightcrypto.model.KeyVaultDocument"/>
-            <Class name="~io\.emmansun\.lightcrypto\.model\.KeyVaultDocument\$.+"/>
+            <Class name="~io\.github\.emmansun\.lightcrypto\.model\.KeyVaultDocument\$.+"/>
             <Class name="io.github.emmansun.lightcrypto.model.WrappedKey"/>
             <Class name="io.github.emmansun.lightcrypto.query.CryptoMongoRepositoryFactory"/>
             <Class name="io.github.emmansun.lightcrypto.query.CryptoQueryLookupStrategy"/>
