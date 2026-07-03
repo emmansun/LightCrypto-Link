@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!--
+        Suppress EI_EXPOSE_REP / EI_EXPOSE_REP2 for Lombok @Data and Java records.
+        These are false positives: the classes are internal data holders,
+        and defensive copying would add unnecessary overhead.
+    -->
+    <Match>
+        <Or>
+            <Class name="com.lcl.crypto.model.EncryptedFieldMetadata"/>
+            <Class name="com.lcl.crypto.model.KeyVaultDocument"/>
+            <Class name="~com\.lcl\.crypto\.model\.KeyVaultDocument\$.+"/>
+            <Class name="com.lcl.crypto.model.WrappedKey"/>
+            <Class name="com.lcl.crypto.query.CryptoMongoRepositoryFactory"/>
+            <Class name="com.lcl.crypto.query.CryptoQueryLookupStrategy"/>
+            <Class name="com.lcl.crypto.service.KeyVaultService"/>
+        </Or>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>
