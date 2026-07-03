@@ -1,5 +1,6 @@
 package io.emmansun.lightcrypto.listener;
 
+import io.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.emmansun.lightcrypto.exception.FatalCryptoException;
 import io.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.emmansun.lightcrypto.service.CryptoCodec;
@@ -88,9 +89,15 @@ public class CryptoMappingMongoConverter extends MappingMongoConverter {
                                 "' is missing '_k' (kid) field. Incompatible with multi-DEK format.");
             }
 
-            // Decrypt using kid-specific DEK
+            // Read algorithm from sub-document, default to AES_256_GCM for backward compatibility
+            String algorithmName = subDoc.getString("_a");
+            SymmetricAlgorithm algorithm = algorithmName != null
+                    ? SymmetricAlgorithm.valueOf(algorithmName)
+                    : SymmetricAlgorithm.AES_256_GCM;
+
+            // Decrypt using kid-specific DEK and algorithm
             byte[] dek = keyVaultService.getDek(kid);
-            byte[] plaintext = cryptoCodec.decrypt(dek, cipherBinary.getData());
+            byte[] plaintext = cryptoCodec.decrypt(dek, cipherBinary.getData(), algorithm);
 
             // Deserialize
             Object value = typeDeserializer.deserialize(typeMarker, plaintext);
@@ -98,7 +105,8 @@ public class CryptoMappingMongoConverter extends MappingMongoConverter {
             // Replace encrypted sub-document with original value
             document.put(meta.fieldName(), value);
 
-            log.debug("Decrypted field '{}' for entity {} using kid {}", meta.fieldName(), entityClass.getSimpleName(), kid);
+            log.debug("Decrypted field '{}' for entity {} using kid {} and algorithm {}",
+                    meta.fieldName(), entityClass.getSimpleName(), kid, algorithm);
         }
     }
 }

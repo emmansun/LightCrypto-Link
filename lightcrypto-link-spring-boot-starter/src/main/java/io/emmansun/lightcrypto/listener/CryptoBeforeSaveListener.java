@@ -1,5 +1,6 @@
 package io.emmansun.lightcrypto.listener;
 
+import io.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.emmansun.lightcrypto.service.CryptoCodec;
 import io.emmansun.lightcrypto.service.KeyVaultService;
@@ -62,8 +63,11 @@ public class CryptoBeforeSaveListener {
                 // Serialize to byte[]
                 byte[] serialized = typeSerializer.serialize(value);
 
-                // Encrypt
-                byte[] encrypted = cryptoCodec.encrypt(dek, serialized);
+                // Get algorithm from metadata
+                SymmetricAlgorithm algorithm = meta.algorithm();
+
+                // Encrypt with algorithm
+                byte[] encrypted = cryptoCodec.encrypt(dek, serialized, algorithm);
 
                 // Build BSON sub-document
                 Document subDoc = new Document();
@@ -71,6 +75,7 @@ public class CryptoBeforeSaveListener {
                 subDoc.put("_e", 1);
                 subDoc.put("_t", resolveTypeMarker(meta.javaType()));
                 subDoc.put("_k", activeKid);
+                subDoc.put("_a", algorithm.name());
 
                 // Blind index
                 if (meta.blindIndex()) {

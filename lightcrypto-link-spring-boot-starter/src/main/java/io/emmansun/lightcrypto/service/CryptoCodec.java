@@ -1,72 +1,105 @@
 package io.emmansun.lightcrypto.service;
 
+import io.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.emmansun.lightcrypto.exception.CryptoException;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.Base64;
-import java.util.HexFormat;
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
- * Core crypto engine — AES-256-GCM encryption/decryption + HMAC-SHA-256 blind index
+ * Core crypto engine — multi-algorithm encryption/decryption + HMAC-SHA-256 blind index
  * + KCV/Binding computation.
+ * <p>
+ * Uses strategy pattern to dispatch to algorithm-specific encryptors:
+ * AES-256-GCM, AES-256-CBC, SM4-GCM, SM4-CBC.
  */
 public class CryptoCodec {
 
-    private static final int IV_LENGTH = 12;
-    private static final int GCM_TAG_BITS = 128;
-    private static final int ZERO_BLOCK_SIZE = 16;
-
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final Map<SymmetricAlgorithm, SymmetricEncryptor> encryptors;
 
     /**
-     * Encrypt plaintext and return IV || ciphertext.
+     * Create a CryptoCodec with all supported algorithms.
      */
-    public byte[] encrypt(byte[] dek, byte[] plaintext) {
-        try {
-            byte[] iv = new byte[IV_LENGTH];
-            secureRandom.nextBytes(iv);
+    public CryptoCodec() {
+        this.encryptors = new EnumMap<>(SymmetricAlgorithm.class);
+        registerEncryptor(new AesGcmEncryptor());
+        registerEncryptor(new AesCbcEncryptor());
+        registerEncryptor(new Sm4GcmEncryptor());
+        registerEncryptor(new Sm4CbcEncryptor());
+    }
 
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE,
-                    new SecretKeySpec(dek, "AES"),
-                    new GCMParameterSpec(GCM_TAG_BITS, iv));
-
-            byte[] ciphertext = cipher.doFinal(plaintext);
-
-            byte[] result = new byte[IV_LENGTH + ciphertext.length];
-            System.arraycopy(iv, 0, result, 0, IV_LENGTH);
-            System.arraycopy(ciphertext, 0, result, IV_LENGTH, ciphertext.length);
-            return result;
-        } catch (Exception e) {
-            throw new CryptoException("Encryption failed", e);
-        }
+    private void registerEncryptor(SymmetricEncryptor encryptor) {
+        encryptors.put(encryptor.getAlgorithm(), encryptor);
     }
 
     /**
-     * Decrypt IV || ciphertext and return the plaintext.
+     * Encrypt plaintext using the specified algorithm.
+     *
+     * @param dek        the Data Encryption Key (32 bytes)
+     * @param plaintext  the data to encrypt
+     * @param algorithm  the symmetric algorithm to use
+     * @return IV concatenated with ciphertext
      */
+    public byte[] encrypt(byte[] dek, byte[] plaintext, SymmetricAlgorithm algorithm) {
+        SymmetricEncryptor encryptor = getEncryptor(algorithm);
+        return encryptor.encrypt(dek, plaintext);
+    }
+
+    /**
+     * Decrypt data using the specified algorithm.
+     *
+     * @param dek       the Data Encryption Key (32 bytes)
+     * @param data      IV concatenated with ciphertext
+     * @param algorithm the symmetric algorithm to use
+     * @return the decrypted plaintext
+     */
+    public byte[] decrypt(byte[] dek, byte[] data, SymmetricAlgorithm algorithm) {
+        SymmetricEncryptor encryptor = getEncryptor(algorithm);
+        return encryptor.decrypt(dek, data);
+    }
+
+    /**
+     * Encrypt plaintext using the default algorithm (AES-256-GCM).
+     * Deprecated: use {@link #encrypt(byte[], byte[], SymmetricAlgorithm)} instead.
+     */
+    @Deprecated
+    public byte[] encrypt(byte[] dek, byte[] plaintext) {
+        return encrypt(dek, plaintext, SymmetricAlgorithm.AES_256_GCM);
+    }
+
+    /**
+     * Decrypt data using the default algorithm (AES-256-GCM).
+     * Deprecated: use {@link #decrypt(byte[], byte[], SymmetricAlgorithm)} instead.
+     */
+    @Deprecated
     public byte[] decrypt(byte[] dek, byte[] data) {
-        try {
-            byte[] iv = Arrays.copyOfRange(data, 0, IV_LENGTH);
-            byte[] ciphertext = Arrays.copyOfRange(data, IV_LENGTH, data.length);
+        return decrypt(dek, data, SymmetricAlgorithm.AES_256_GCM);
+    }
 
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE,
-                    new SecretKeySpec(dek, "AES"),
-                    new GCMParameterSpec(GCM_TAG_BITS, iv));
+    /**
+     * Compute KCV using the specified algorithm.
+     *
+     * @param key       the encryption key
+     * @param algorithm the symmetric algorithm to use
+     * @return lowercase hex string of the KCV
+     */
+    public String computeKcv(byte[] key, SymmetricAlgorithm algorithm) {
+        SymmetricEncryptor encryptor = getEncryptor(algorithm);
+        return encryptor.computeKcv(key);
+    }
 
-            return cipher.doFinal(ciphertext);
-        } catch (Exception e) {
-            throw new CryptoException("Decryption failed", e);
-        }
+    /**
+     * Compute KCV using the default algorithm (AES-256-GCM).
+     * Deprecated: use {@link #computeKcv(byte[], SymmetricAlgorithm)} instead.
+     */
+    @Deprecated
+    public String computeKcv(byte[] key) {
+        return computeKcv(key, SymmetricAlgorithm.AES_256_GCM);
     }
 
     /**
@@ -92,37 +125,24 @@ public class CryptoCodec {
     }
 
     /**
-     * Compute the KCV (Key Check Value): encrypts an all-zero block with AES-256-GCM
-     * and returns the Hex of IV+ciphertext. Uses a fixed all-zero IV for determinism.
+     * Compute a dual-key binding fingerprint: HMAC-SHA-256(hmacKey, dek).
      */
-    public String computeKcv(byte[] key) {
-        try {
-            byte[] zeroIv = new byte[IV_LENGTH]; // All-zero IV for determinism
-            byte[] zeroBlock = new byte[ZERO_BLOCK_SIZE];
-
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE,
-                    new SecretKeySpec(key, "AES"),
-                    new GCMParameterSpec(GCM_TAG_BITS, zeroIv));
-
-            byte[] encrypted = cipher.doFinal(zeroBlock);
-            return HexFormat.of().formatHex(encrypted);
-        } catch (Exception e) {
-            throw new CryptoException("KCV computation failed", e);
-        }
-    }
-
-    /**
-     * Compute a dual-key binding fingerprint: HMAC-SHA-256(hmacKey, aesKey).
-     */
-    public String computeBinding(byte[] hmacKey, byte[] aesKey) {
+    public String computeBinding(byte[] hmacKey, byte[] dek) {
         HMac hmac = new HMac(new SHA256Digest());
         hmac.init(new KeyParameter(hmacKey));
-        hmac.update(aesKey, 0, aesKey.length);
+        hmac.update(dek, 0, dek.length);
 
         byte[] result = new byte[hmac.getMacSize()];
         hmac.doFinal(result, 0);
 
-        return HexFormat.of().formatHex(result);
+        return java.util.HexFormat.of().formatHex(result);
+    }
+
+    private SymmetricEncryptor getEncryptor(SymmetricAlgorithm algorithm) {
+        SymmetricEncryptor encryptor = encryptors.get(algorithm);
+        if (encryptor == null) {
+            throw new CryptoException("Unsupported algorithm: " + algorithm);
+        }
+        return encryptor;
     }
 }
