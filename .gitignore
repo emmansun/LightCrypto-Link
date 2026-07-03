@@ -21,3 +21,6 @@ buildNumber.properties
 .vscode/
 .idea/
 *.png
+
+# Local config with sensitive credentials
+application-local.properties

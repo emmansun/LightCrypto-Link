@@ -2,7 +2,7 @@
 
 **A pure Java, lightweight application-level field encryption library (ALFE) for Spring Boot + MongoDB.**
 
-Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match queries, multi-DEK envelope encryption with automatic key rotation — all without libmongocrypt.
+Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match queries, multi-DEK envelope encryption with key rotation support — all without libmongocrypt.
 
 [![CI](https://github.com/emmansun/LightCrypto-Link/actions/workflows/ci.yml/badge.svg)](https://github.com/emmansun/LightCrypto-Link/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -15,9 +15,9 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 
 - **Transparent Encryption** — annotate a field with `@Encrypted`, done. No extra code.
 - **Blind Index Queries** — `findByPhone("138...")` works on encrypted fields via HMAC blind index.
-- **Multi-DEK Envelope Encryption** — each DEK is independently wrapped by the CMK; automatic rotation per field.
+- **Multi-DEK Envelope Encryption** — each entity class has its own DEK, independently wrapped by the CMK; supports key rotation with versioned DEK entries.
 - **Type Preservation** — encrypts `String`, `Integer`, `Long`, `LocalDate`, `BigDecimal`, `byte[]`, enums, and more.
-- **Pluggable CMK** — built-in local symmetric CMK; SPI ready for Azure Key Vault, Alibaba Cloud KMS, etc.
+- **Pluggable CMK** — built-in local symmetric CMK; cloud KMS providers for Azure Key Vault and Alibaba Cloud KMS (asymmetric RSA-OAEP).
 - **Zero libmongocrypt** — pure Java crypto via Bouncy Castle; no native driver dependencies.
 - **Spring Boot Starter** — drop-in auto-configuration; works with standard `MongoRepository`.
 
@@ -35,7 +35,27 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 
 > Until published to Maven Central, consume from [GitHub Packages](https://github.com/emmansun/LightCrypto-Link/packages).
 
+For cloud KMS integration, add the corresponding provider module:
+
+```xml
+<!-- Azure Key Vault -->
+<dependency>
+    <groupId>io.emmansun</groupId>
+    <artifactId>lightcrypto-link-azure-kms</artifactId>
+    <version>1.0.0</version>
+</dependency>
+
+<!-- Alibaba Cloud KMS -->
+<dependency>
+    <groupId>io.emmansun</groupId>
+    <artifactId>lightcrypto-link-alibaba-kms</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
 ### 2. Configure
+
+**Local symmetric CMK (development / simple use cases):**
 
 ```yaml
 lcl:
@@ -44,7 +64,33 @@ lcl:
     enabled: true
 ```
 
-> **Production**: inject `lcl.crypto.cmk` via environment variable, K8s Secret, or Config Service.
+**Azure Key Vault (production):**
+
+```yaml
+lcl:
+  crypto:
+    azure:
+      vault-uri: ${AZURE_VAULT_URI}
+      key-name: ${AZURE_KEY_NAME}
+      tenant-id: ${AZURE_TENANT_ID}
+      client-id: ${AZURE_CLIENT_ID}
+      client-secret: ${AZURE_CLIENT_SECRET}
+```
+
+**Alibaba Cloud KMS (production):**
+
+```yaml
+lcl:
+  crypto:
+    alibaba:
+      access-key-id: ${ALIBABA_AK_ID}
+      access-key-secret: ${ALIBABA_AK_SECRET}
+      endpoint: ${ALIBABA_KMS_ENDPOINT:kms.cn-shenzhen.aliyuncs.com}
+      key-id: ${ALIBABA_KMS_KEY_ID}
+      algorithm: RSA
+```
+
+> **Production**: always inject secrets via environment variables, K8s Secrets, or Config Service. Never commit them.
 
 ### 3. Annotate
 
@@ -80,7 +126,7 @@ User found = userRepository.findByPhone("13800138001");
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `lcl.crypto.enabled` | `boolean` | `true` | Enable/disable encryption globally |
-| `lcl.crypto.cmk` | `String` | — | 64-hex-char CMK (32 bytes) |
+| `lcl.crypto.cmk` | `String` | — | 64-hex-char CMK (32 bytes) for local symmetric provider |
 | `lcl.crypto.keyVaultDatabase` | `String` | *(app db)* | MongoDB database for Key Vault collection |
 | `lcl.crypto.autoInit` | `boolean` | `true` | Auto-create vault on first startup |
 
@@ -104,20 +150,32 @@ User found = userRepository.findByPhone("13800138001");
 
 ### Envelope Encryption
 
-1. On first write to a field, LCL generates a random **DEK** (Data Encryption Key).
-2. The DEK is **wrapped** (encrypted) by the CMK and stored in the Key Vault collection.
+1. On first write for an entity class, LCL generates a random **DEK** (Data Encryption Key) and HMAC key.
+2. Both keys are **wrapped** (encrypted) by the CMK and stored in the Key Vault collection (`__lcl_keyvault`).
 3. Field values are encrypted with **AES-256-GCM** using the DEK.
-4. Each encrypted field stores a base64url-encoded ciphertext with version tag.
+4. Each encrypted field stores a sub-document with ciphertext, type marker, and key version ID (`_k`).
 
-### DEK Rotation
+### DEK Versioning & Rotation
 
-LCL supports per-field DEK versioning. When the CMK is rotated, new writes use the latest DEK version while old ciphertexts are lazily re-encrypted on read.
+LCL uses a **per-entity-class** DEK architecture:
+
+- Each entity class with `@Encrypted` fields has its own vault document (e.g., `lcl-dek-User`).
+- Each vault maintains a `keys[]` array with versioned DEK entries (`kid` = `v1-a3b2c1d4`, `v2-...`, etc.).
+- On **write**, the active DEK version is used for encryption; the `kid` is stored in each field's `_k` sub-document.
+- On **read**, the `kid` from the stored sub-document is used to look up the correct DEK version for decryption.
+
+**Key rotation** is performed by calling `KeyVaultService.rotateKey(EntityClass.class)`:
+
+1. The current active DEK is marked as `ROTATED` (kept in vault for decrypting old data).
+2. A new DEK/HMAC key pair is generated with an incremented version (e.g., `v2-...`).
+3. The new entry becomes the active `kid`.
+4. Subsequent writes use the new DEK. Existing ciphertext encrypted with old versions is **re-encrypted on the next write** (save), not on read.
 
 ### Blind Index
 
 When `@Encrypted(blindIndex = true)` is set:
-- An HMAC-SHA256 hash is computed from the plaintext + field salt.
-- The hash is stored alongside the ciphertext.
+- An HMAC-SHA256 hash is computed from the plaintext + field name.
+- The hash is stored alongside the ciphertext in the `b` field.
 - `findByPhone(...)` is rewritten to query the HMAC index — no decryption needed.
 
 ## Supported Types
@@ -137,24 +195,33 @@ When `@Encrypted(blindIndex = true)` is set:
 Implement `CmkProvider` to integrate with your KMS:
 
 ```java
-@Bean
-@ConditionalOnMissingBean
-public CmkProvider cmkProvider(CryptoProperties properties) {
-    return new AzureKeyVaultCmkProvider(properties.getCmk());
+public interface CmkProvider {
+    String getProviderId();           // unique identifier
+    WrappedKey wrap(byte[] key);      // encrypt a DEK with the CMK
+    byte[] unwrap(WrappedKey wrapped); // decrypt a wrapped DEK
 }
 ```
 
-The `CmkProvider` SPI requires:
-- `getProviderId()` — unique identifier
-- `wrap(byte[])` — encrypt a DEK with the CMK
-- `unwrap(WrappedKey)` — decrypt a wrapped DEK
+Built-in providers:
+- **LocalSymmetricCmkProvider** — AES-256-GCM wrap/unwrap (configured via `lcl.crypto.cmk`)
+- **AzureKeyVaultCmkProvider** — local RSA-OAEP wrap + remote Key Vault unwrap (configured via `lcl.crypto.azure.*`)
+- **AlibabaKmsCmkProvider** — local RSA-OAEP wrap + remote KMS unwrap (configured via `lcl.crypto.alibaba.*`)
 
 ## Examples
 
-See [lightcrypto-link-examples/basic-crud](lightcrypto-link-examples/basic-crud/) for a runnable demo:
+See [lightcrypto-link-examples](lightcrypto-link-examples/) for runnable demos:
 
 ```bash
+# Basic CRUD with local symmetric CMK
 cd lightcrypto-link-examples/basic-crud
+mvn spring-boot:run
+
+# Azure Key Vault integration
+cd lightcrypto-link-examples/azure-keyvault
+mvn spring-boot:run
+
+# Alibaba Cloud KMS integration
+cd lightcrypto-link-examples/alibaba-kms
 mvn spring-boot:run
 ```
 
@@ -171,8 +238,12 @@ mvn clean verify
 ```
 LightCrypto-Link/
 ├── lightcrypto-link-spring-boot-starter/   # Library (Spring Boot starter)
+├── lightcrypto-link-azure-kms/             # Azure Key Vault CMK Provider
+├── lightcrypto-link-alibaba-kms/           # Alibaba Cloud KMS CMK Provider
 ├── lightcrypto-link-examples/              # Example applications
-│   └── basic-crud/                         # Minimal CRUD demo
+│   ├── basic-crud/                         # Minimal CRUD demo (local CMK)
+│   ├── azure-keyvault/                     # Azure Key Vault demo
+│   └── alibaba-kms/                        # Alibaba Cloud KMS demo
 └── pom.xml                                 # Parent POM
 ```
 
