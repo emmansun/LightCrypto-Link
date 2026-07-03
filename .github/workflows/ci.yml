@@ -31,15 +31,15 @@ jobs:
         run: mvn -B clean verify
 
       - name: Checkstyle
-        run: mvn -B checkstyle:check
+        run: mvn -B -pl lightcrypto-link-spring-boot-starter checkstyle:check
 
       - name: SpotBugs
-        run: mvn -B spotbugs:check
+        run: mvn -B -pl lightcrypto-link-spring-boot-starter spotbugs:check
 
       - name: Upload JaCoCo Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
-          path: target/site/jacoco/
+          path: lightcrypto-link-spring-boot-starter/target/site/jacoco/
           retention-days: 14
