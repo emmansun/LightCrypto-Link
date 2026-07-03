@@ -14,6 +14,7 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 ## Features
 
 - **Transparent Encryption** — annotate a field with `@Encrypted`, done. No extra code.
+- **Multiple Symmetric Algorithms** — choose per-field from AES-256-GCM, AES-256-CBC, SM4-GCM, SM4-CBC (via Bouncy Castle).
 - **Blind Index Queries** — `findByPhone("138...")` works on encrypted fields via HMAC blind index.
 - **Multi-DEK Envelope Encryption** — each entity class has its own DEK, independently wrapped by the CMK; supports key rotation with versioned DEK entries.
 - **Type Preservation** — encrypts `String`, `Integer`, `Long`, `LocalDate`, `BigDecimal`, `byte[]`, enums, and more.
@@ -101,20 +102,34 @@ public class User {
     private String name;                         // plain text
 
     @Encrypted(blindIndex = true)
-    private String phone;                        // encrypted + queryable
+    private String phone;                        // encrypted (AES-256-GCM, default) + queryable
+
+    @Encrypted(algorithm = SymmetricAlgorithm.SM4_GCM)
+    private String idCard;                       // encrypted with SM4-GCM
 
     @Encrypted
     private Integer age;                         // encrypted, no query
 }
 ```
 
+**Supported algorithms:**
+
+| Algorithm | Key Size | IV Size | Mode | Provider |
+|---|---|---|---|---|
+| `AES_256_GCM` *(default)* | 32 bytes | 12 bytes | GCM/NoPadding | JDK |
+| `AES_256_CBC` | 32 bytes | 16 bytes | CBC/PKCS5Padding | JDK |
+| `SM4_GCM` | 16 bytes* | 12 bytes | GCM/NoPadding | Bouncy Castle |
+| `SM4_CBC` | 16 bytes* | 16 bytes | CBC/PKCS5Padding | Bouncy Castle |
+
+> *SM4 uses the first 16 bytes of the 32-byte DEK.
+
 ### 4. Use Normally
 
 ```java
-// Save — phone and age are encrypted transparently
+// Save — phone, idCard and age are encrypted transparently
 userRepository.save(user);
 
-// Read — decrypted automatically
+// Read — decrypted automatically (algorithm detected from sub-document `_a` tag)
 User u = userRepository.findById(id).orElseThrow();
 
 // Query — blind index intercepts findByPhone
@@ -138,8 +153,9 @@ User found = userRepository.findByPhone("13800138001");
 │  (your code) │    read     │  (Save/Converter) │   unwrap    │  (MongoDB)  │
 └─────────────┘              └────────┬──────────┘             └────────────┘
                                       │
-                                 AES-256-GCM
-                                 encrypt/decrypt
+                              AES-256-GCM/CBC
+                              SM4-GCM/CBC
+                              encrypt/decrypt
                                       │
                                ┌──────▼──────┐
                                │   MongoDB    │
@@ -152,8 +168,24 @@ User found = userRepository.findByPhone("13800138001");
 
 1. On first write for an entity class, LCL generates a random **DEK** (Data Encryption Key) and HMAC key.
 2. Both keys are **wrapped** (encrypted) by the CMK and stored in the Key Vault collection (`__lcl_keyvault`).
-3. Field values are encrypted with **AES-256-GCM** using the DEK.
-4. Each encrypted field stores a sub-document with ciphertext, type marker, and key version ID (`_k`).
+3. Field values are encrypted using the algorithm specified in `@Encrypted` (default: **AES-256-GCM**) with the DEK.
+4. Each encrypted field stores a sub-document containing ciphertext, type marker, key version ID (`_k`), and algorithm tag (`_a`).
+
+### Sub-Document Format
+
+Each encrypted field is stored as a BSON sub-document:
+
+```json
+{
+  "_k": "v1-a3b2c1d4",       // DEK version ID
+  "_a": "AES_256_GCM",       // symmetric algorithm used
+  "t": "S",                  // type marker
+  "d": BinData(0, "..."),    // ciphertext
+  "b": BinData(0, "...")     // blind index (optional)
+}
+```
+
+The `_a` tag enables **backward compatibility**: if absent, the reader defaults to `AES_256_GCM` (legacy documents).
 
 ### DEK Versioning & Rotation
 
@@ -161,6 +193,7 @@ LCL uses a **per-entity-class** DEK architecture:
 
 - Each entity class with `@Encrypted` fields has its own vault document (e.g., `lcl-dek-User`).
 - Each vault maintains a `keys[]` array with versioned DEK entries (`kid` = `v1-a3b2c1d4`, `v2-...`, etc.).
+- Each algorithm computes an independent **KCV** (Key Check Value) for verification.
 - On **write**, the active DEK version is used for encryption; the `kid` is stored in each field's `_k` sub-document.
 - On **read**, the `kid` from the stored sub-document is used to look up the correct DEK version for decryption.
 
@@ -175,7 +208,7 @@ LCL uses a **per-entity-class** DEK architecture:
 
 When `@Encrypted(blindIndex = true)` is set:
 - An HMAC-SHA256 hash is computed from the plaintext + field name.
-- The hash is stored alongside the ciphertext in the `b` field.
+- The hash is Base64-encoded and stored alongside the ciphertext in the `b` field.
 - `findByPhone(...)` is rewritten to query the HMAC index — no decryption needed.
 
 ## Supported Types
