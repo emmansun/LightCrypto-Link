@@ -22,6 +22,8 @@
 
     <modules>
         <module>lightcrypto-link-spring-boot-starter</module>
+        <module>lightcrypto-link-azure-kms</module>
+        <module>lightcrypto-link-alibaba-kms</module>
         <module>lightcrypto-link-examples</module>
     </modules>
 

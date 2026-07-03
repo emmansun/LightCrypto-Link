@@ -46,21 +46,7 @@
             <artifactId>bcpkix-jdk18on</artifactId>
         </dependency>
 
-        <!-- 4. Cloud KMS SDK (optional — Azure & Alibaba Cloud) -->
-        <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-security-keyvault-keys</artifactId>
-            <version>4.8.2</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>com.aliyun</groupId>
-            <artifactId>alibabacloud-kms20160120</artifactId>
-            <version>1.0.12</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- 5. Lombok -->
+        <!-- 4. Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
