@@ -7,13 +7,13 @@
     -->
     <Match>
         <Or>
-            <Class name="com.lcl.crypto.model.EncryptedFieldMetadata"/>
-            <Class name="com.lcl.crypto.model.KeyVaultDocument"/>
-            <Class name="~com\.lcl\.crypto\.model\.KeyVaultDocument\$.+"/>
-            <Class name="com.lcl.crypto.model.WrappedKey"/>
-            <Class name="com.lcl.crypto.query.CryptoMongoRepositoryFactory"/>
-            <Class name="com.lcl.crypto.query.CryptoQueryLookupStrategy"/>
-            <Class name="com.lcl.crypto.service.KeyVaultService"/>
+            <Class name="io.emmansun.lightcrypto.model.EncryptedFieldMetadata"/>
+            <Class name="io.emmansun.lightcrypto.model.KeyVaultDocument"/>
+            <Class name="~io\.emmansun\.lightcrypto\.model\.KeyVaultDocument\$.+"/>
+            <Class name="io.emmansun.lightcrypto.model.WrappedKey"/>
+            <Class name="io.emmansun.lightcrypto.query.CryptoMongoRepositoryFactory"/>
+            <Class name="io.emmansun.lightcrypto.query.CryptoQueryLookupStrategy"/>
+            <Class name="io.emmansun.lightcrypto.service.KeyVaultService"/>
         </Or>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>

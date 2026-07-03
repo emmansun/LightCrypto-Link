@@ -1,1 +1,1 @@
-com.lcl.crypto.provider.azure.AzureKeyVaultCmkAutoConfiguration
+io.emmansun.lightcrypto.provider.azure.AzureKeyVaultCmkAutoConfiguration

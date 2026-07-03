@@ -1,1 +1,1 @@
-com.lcl.crypto.provider.alibaba.AlibabaKmsCmkAutoConfiguration
+io.emmansun.lightcrypto.provider.alibaba.AlibabaKmsCmkAutoConfiguration

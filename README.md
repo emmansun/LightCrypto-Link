@@ -27,7 +27,7 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 
 ```xml
 <dependency>
-    <groupId>com.lcl.crypto</groupId>
+    <groupId>io.emmansun</groupId>
     <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
     <version>1.0.0</version>
 </dependency>

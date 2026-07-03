@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://apache.org http://apache.org">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.lcl.crypto</groupId>
+    <groupId>io.emmansun</groupId>
     <artifactId>lightcrypto-link-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -54,7 +54,7 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.lcl.crypto</groupId>
+                <groupId>io.emmansun</groupId>
                 <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
