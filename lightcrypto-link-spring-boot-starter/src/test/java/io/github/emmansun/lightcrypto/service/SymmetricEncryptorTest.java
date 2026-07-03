@@ -13,7 +13,7 @@ class SymmetricEncryptorTest {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @ParameterizedTest
-    @EnumSource(SymmetricAlgorithm.class)
+    @EnumSource(value = SymmetricAlgorithm.class, names = "DEFAULT", mode = EnumSource.Mode.EXCLUDE)
     void encryptDecryptRoundtrip(SymmetricAlgorithm algorithm) {
         SymmetricEncryptor encryptor = createEncryptor(algorithm);
         byte[] key = generateKey(algorithm);
@@ -26,7 +26,7 @@ class SymmetricEncryptorTest {
     }
 
     @ParameterizedTest
-    @EnumSource(SymmetricAlgorithm.class)
+    @EnumSource(value = SymmetricAlgorithm.class, names = "DEFAULT", mode = EnumSource.Mode.EXCLUDE)
     void encryptProducesUniqueCiphertext(SymmetricAlgorithm algorithm) {
         SymmetricEncryptor encryptor = createEncryptor(algorithm);
         byte[] key = generateKey(algorithm);
@@ -39,7 +39,7 @@ class SymmetricEncryptorTest {
     }
 
     @ParameterizedTest
-    @EnumSource(SymmetricAlgorithm.class)
+    @EnumSource(value = SymmetricAlgorithm.class, names = "DEFAULT", mode = EnumSource.Mode.EXCLUDE)
     void kcvConsistency(SymmetricAlgorithm algorithm) {
         SymmetricEncryptor encryptor = createEncryptor(algorithm);
         byte[] key = generateKey(algorithm);
@@ -52,7 +52,7 @@ class SymmetricEncryptorTest {
     }
 
     @ParameterizedTest
-    @EnumSource(SymmetricAlgorithm.class)
+    @EnumSource(value = SymmetricAlgorithm.class, names = "DEFAULT", mode = EnumSource.Mode.EXCLUDE)
     void kcvDetectsKeyChange(SymmetricAlgorithm algorithm) {
         SymmetricEncryptor encryptor = createEncryptor(algorithm);
         byte[] key1 = generateKey(algorithm);
@@ -65,7 +65,7 @@ class SymmetricEncryptorTest {
     }
 
     @ParameterizedTest
-    @EnumSource(SymmetricAlgorithm.class)
+    @EnumSource(value = SymmetricAlgorithm.class, names = "DEFAULT", mode = EnumSource.Mode.EXCLUDE)
     void getAlgorithmReturnsCorrectValue(SymmetricAlgorithm algorithm) {
         SymmetricEncryptor encryptor = createEncryptor(algorithm);
         assertThat(encryptor.getAlgorithm()).isEqualTo(algorithm);
@@ -77,6 +77,7 @@ class SymmetricEncryptorTest {
             case AES_256_CBC -> new AesCbcEncryptor();
             case SM4_GCM -> new Sm4GcmEncryptor();
             case SM4_CBC -> new Sm4CbcEncryptor();
+            case DEFAULT -> throw new IllegalArgumentException("DEFAULT should not reach encryptor");
         };
     }
 

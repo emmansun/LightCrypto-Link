@@ -20,7 +20,7 @@ class EncryptedAnnotationTest {
         Encrypted encrypted = phoneField.getAnnotation(Encrypted.class);
 
         assertThat(encrypted).isNotNull();
-        assertThat(encrypted.algorithm()).isEqualTo(SymmetricAlgorithm.AES_256_GCM);
+        assertThat(encrypted.algorithm()).isEqualTo(SymmetricAlgorithm.DEFAULT);
         assertThat(encrypted.blindIndex()).isTrue(); // phone has blindIndex=true
     }
 
@@ -34,6 +34,6 @@ class EncryptedAnnotationTest {
         assertThat(encrypted).isNotNull();
         assertThat(encrypted.blindIndex()).isFalse();
         assertThat(encrypted.fieldName()).isEqualTo("");
-        assertThat(encrypted.algorithm()).isEqualTo(SymmetricAlgorithm.AES_256_GCM);
+        assertThat(encrypted.algorithm()).isEqualTo(SymmetricAlgorithm.DEFAULT);
     }
 }

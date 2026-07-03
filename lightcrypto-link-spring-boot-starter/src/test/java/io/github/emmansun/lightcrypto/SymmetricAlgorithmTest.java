@@ -8,10 +8,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SymmetricAlgorithmTest {
 
     @Test
-    void allFourAlgorithmsExist() {
+    void allAlgorithmsExist() {
         SymmetricAlgorithm[] values = SymmetricAlgorithm.values();
-        assertThat(values).hasSize(4);
+        assertThat(values).hasSize(5);
         assertThat(values).containsExactly(
+                SymmetricAlgorithm.DEFAULT,
                 SymmetricAlgorithm.AES_256_GCM,
                 SymmetricAlgorithm.AES_256_CBC,
                 SymmetricAlgorithm.SM4_GCM,
@@ -21,6 +22,7 @@ class SymmetricAlgorithmTest {
 
     @Test
     void valueOfWorksForAllAlgorithms() {
+        assertThat(SymmetricAlgorithm.valueOf("DEFAULT")).isEqualTo(SymmetricAlgorithm.DEFAULT);
         assertThat(SymmetricAlgorithm.valueOf("AES_256_GCM")).isEqualTo(SymmetricAlgorithm.AES_256_GCM);
         assertThat(SymmetricAlgorithm.valueOf("AES_256_CBC")).isEqualTo(SymmetricAlgorithm.AES_256_CBC);
         assertThat(SymmetricAlgorithm.valueOf("SM4_GCM")).isEqualTo(SymmetricAlgorithm.SM4_GCM);

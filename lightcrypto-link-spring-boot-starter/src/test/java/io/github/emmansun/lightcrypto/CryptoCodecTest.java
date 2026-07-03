@@ -96,7 +96,7 @@ class CryptoCodecTest extends LclTestBase {
     }
 
     @ParameterizedTest
-    @EnumSource(SymmetricAlgorithm.class)
+    @EnumSource(value = SymmetricAlgorithm.class, names = "DEFAULT", mode = EnumSource.Mode.EXCLUDE)
     void encryptDecryptRoundtripPerAlgorithm(SymmetricAlgorithm algorithm) {
         byte[] plaintext = "Hello, World!".getBytes(StandardCharsets.UTF_8);
         byte[] encrypted = codec.encrypt(TEST_DEK, plaintext, algorithm);
@@ -105,7 +105,7 @@ class CryptoCodecTest extends LclTestBase {
     }
 
     @ParameterizedTest
-    @EnumSource(SymmetricAlgorithm.class)
+    @EnumSource(value = SymmetricAlgorithm.class, names = "DEFAULT", mode = EnumSource.Mode.EXCLUDE)
     void kcvPerAlgorithm(SymmetricAlgorithm algorithm) {
         String kcv1 = codec.computeKcv(TEST_DEK, algorithm);
         String kcv2 = codec.computeKcv(TEST_DEK, algorithm);

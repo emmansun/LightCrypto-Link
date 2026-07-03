@@ -25,9 +25,12 @@ import java.lang.annotation.*;
 public @interface Encrypted {
 
     /**
-     * Symmetric encryption algorithm, defaults to AES-256-GCM.
+     * Symmetric encryption algorithm.
+     * Defaults to {@link SymmetricAlgorithm#DEFAULT}, which resolves to the global
+     * configuration {@code lcl.crypto.algorithm} (default: AES_256_GCM).
+     * Override per-field to use a specific algorithm.
      */
-    SymmetricAlgorithm algorithm() default SymmetricAlgorithm.AES_256_GCM;
+    SymmetricAlgorithm algorithm() default SymmetricAlgorithm.DEFAULT;
 
     /**
      * Whether to generate a blind index (for exact-match queries), defaults to false.

@@ -1,5 +1,6 @@
 package io.github.emmansun.lightcrypto;
 
+import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.listener.CryptoBeforeSaveListener;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.service.CryptoCodec;
@@ -20,7 +21,7 @@ class CryptoBeforeSaveListenerTest extends LclTestBase {
 
     @BeforeEach
     void setup() {
-        EntityMetadataCache mc = new EntityMetadataCache();
+        EntityMetadataCache mc = new EntityMetadataCache(new CryptoProperties());
         CryptoCodec codec = createTestCryptoCodec();
         TypeSerializer ser = createTestTypeSerializer();
         KeyVaultService vs = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY);

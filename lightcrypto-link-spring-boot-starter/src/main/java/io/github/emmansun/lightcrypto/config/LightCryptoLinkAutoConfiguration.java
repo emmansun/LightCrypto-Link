@@ -65,8 +65,8 @@ public class LightCryptoLinkAutoConfiguration {
     }
 
     @Bean
-    public EntityMetadataCache entityMetadataCache() {
-        return new EntityMetadataCache();
+    public EntityMetadataCache entityMetadataCache(CryptoProperties properties) {
+        return new EntityMetadataCache(properties);
     }
 
     @Bean

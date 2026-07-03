@@ -1,5 +1,6 @@
 package io.github.emmansun.lightcrypto.config;
 
+import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -15,6 +16,9 @@ public class CryptoProperties {
 
     /** CMK (Customer Master Key) — 64-character hex string = 32-byte symmetric key. */
     private String cmk;
+
+    /** Global default symmetric algorithm for @Encrypted fields (default: AES_256_GCM). */
+    private SymmetricAlgorithm algorithm = SymmetricAlgorithm.AES_256_GCM;
 
     /** Database name where the Key Vault collection resides (defaults to the application database). */
     private String keyVaultDatabase;

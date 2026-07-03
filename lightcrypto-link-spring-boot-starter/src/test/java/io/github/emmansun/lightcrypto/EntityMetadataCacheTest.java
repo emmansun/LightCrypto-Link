@@ -1,5 +1,6 @@
 package io.github.emmansun.lightcrypto;
 
+import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
@@ -18,7 +19,7 @@ import static org.assertj.core.api.Assertions.*;
  */
 class EntityMetadataCacheTest {
 
-    private final EntityMetadataCache cache = new EntityMetadataCache();
+    private final EntityMetadataCache cache = new EntityMetadataCache(new CryptoProperties());
 
     @Test
     void testUserHasOneEncryptedField() {

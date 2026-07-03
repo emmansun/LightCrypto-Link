@@ -5,7 +5,10 @@ package io.github.emmansun.lightcrypto.annotation;
  * Supports AES-256 (GCM/CBC) and SM4 (GCM/CBC) for DEK encryption.
  */
 public enum SymmetricAlgorithm {
-    /** AES-256-GCM: 12-byte IV, authenticated encryption (default) */
+    /** Sentinel value: use the global default from {@code lcl.crypto.algorithm}. */
+    DEFAULT,
+
+    /** AES-256-GCM: 12-byte IV, authenticated encryption (global default) */
     AES_256_GCM,
 
     /** AES-256-CBC: 16-byte IV, PKCS5 padding (legacy compatibility) */

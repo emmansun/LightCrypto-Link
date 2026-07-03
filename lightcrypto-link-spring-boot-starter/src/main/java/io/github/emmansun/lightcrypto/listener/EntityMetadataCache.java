@@ -1,6 +1,8 @@
 package io.github.emmansun.lightcrypto.listener;
 
 import io.github.emmansun.lightcrypto.annotation.Encrypted;
+import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
+import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 
@@ -15,7 +17,12 @@ import static io.github.emmansun.lightcrypto.service.TypeSerializer.isSupported;
  */
 public class EntityMetadataCache {
 
+    private final CryptoProperties cryptoProperties;
     private final Map<Class<?>, List<EncryptedFieldMetadata>> cache = new ConcurrentHashMap<>();
+
+    public EntityMetadataCache(CryptoProperties cryptoProperties) {
+        this.cryptoProperties = cryptoProperties;
+    }
 
     /**
      * Get the list of encrypted field metadata for the given entity.
@@ -50,11 +57,16 @@ public class EntityMetadataCache {
                     ? field.getName()
                     : encrypted.fieldName();
 
+            // Resolve DEFAULT to global default algorithm
+            SymmetricAlgorithm algo = (encrypted.algorithm() == SymmetricAlgorithm.DEFAULT)
+                    ? cryptoProperties.getAlgorithm()
+                    : encrypted.algorithm();
+
             result.add(new EncryptedFieldMetadata(
                     field,
                     field.getName(),
                     fieldType,
-                    encrypted.algorithm(),
+                    algo,
                     encrypted.blindIndex(),
                     effectiveFieldName
             ));
