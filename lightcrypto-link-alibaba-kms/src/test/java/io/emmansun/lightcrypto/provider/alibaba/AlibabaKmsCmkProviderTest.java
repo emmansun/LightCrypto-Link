@@ -31,7 +31,7 @@ class AlibabaKmsCmkProviderTest {
 
     @Test
     void rsaWrap_shouldReturnCorrectAlgorithmAndNonEmptyCiphertext() throws Exception {
-        AlibabaKmsCmkProvider provider = createProvider("RSA");
+        AlibabaKmsCmkProvider provider = createProvider();
         byte[] plaintextKey = new byte[32];
 
         WrappedKey wrapped = provider.wrap(plaintextKey);
@@ -44,7 +44,7 @@ class AlibabaKmsCmkProviderTest {
 
     @Test
     void rsaWrap_shouldProduceDifferentCiphertextsForSameInput() throws Exception {
-        AlibabaKmsCmkProvider provider = createProvider("RSA");
+        AlibabaKmsCmkProvider provider = createProvider();
         byte[] plaintextKey = new byte[32];
 
         WrappedKey wrapped1 = provider.wrap(plaintextKey);
@@ -54,28 +54,22 @@ class AlibabaKmsCmkProviderTest {
     }
 
     @Test
-    void constructor_shouldRejectInvalidAlgorithm() throws Exception {
+    void constructor_shouldRejectUnsupportedKeyType() throws Exception {
         com.aliyun.kms20160120.Client dummyClient = createDummyClient();
+        // Generate a DSA key which is not supported
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("DSA");
+        kpg.initialize(1024);
+        KeyPair dsaKeyPair = kpg.generateKeyPair();
 
         assertThatThrownBy(() -> new AlibabaKmsCmkProvider(
-                "key-1", "ver-1", rsaKeyPair.getPublic(), dummyClient, "DES"))
+                "key-1", "ver-1", dsaKeyPair.getPublic(), dummyClient))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unsupported algorithm");
-    }
-
-    @Test
-    void constructor_shouldRejectNullAlgorithm() throws Exception {
-        com.aliyun.kms20160120.Client dummyClient = createDummyClient();
-
-        assertThatThrownBy(() -> new AlibabaKmsCmkProvider(
-                "key-1", "ver-1", rsaKeyPair.getPublic(), dummyClient, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("algorithm must not be null or blank");
+                .hasMessageContaining("Unsupported public key algorithm");
     }
 
     @Test
     void getProviderId_shouldReturnAlibabaKms() throws Exception {
-        AlibabaKmsCmkProvider provider = createProvider("RSA");
+        AlibabaKmsCmkProvider provider = createProvider();
         assertThat(provider.getProviderId()).isEqualTo("alibaba-kms");
     }
 
@@ -83,36 +77,29 @@ class AlibabaKmsCmkProviderTest {
 
     @Test
     void publicKeyLoader_shouldParseValidRsaPem() {
-        PublicKey key = PublicKeyLoader.loadFromPem(rsaPublicKeyPem, "RSA");
+        PublicKey key = PublicKeyLoader.loadFromPem(rsaPublicKeyPem);
         assertThat(key).isNotNull();
         assertThat(key.getAlgorithm()).isEqualTo("RSA");
     }
 
     @Test
     void publicKeyLoader_shouldRejectInvalidPem() {
-        assertThatThrownBy(() -> PublicKeyLoader.loadFromPem("not-a-pem", "RSA"))
+        assertThatThrownBy(() -> PublicKeyLoader.loadFromPem("not-a-pem"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void publicKeyLoader_shouldRejectNullPem() {
-        assertThatThrownBy(() -> PublicKeyLoader.loadFromPem(null, "RSA"))
+        assertThatThrownBy(() -> PublicKeyLoader.loadFromPem(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null or blank");
     }
 
-    @Test
-    void publicKeyLoader_shouldRejectUnsupportedAlgorithm() {
-        assertThatThrownBy(() -> PublicKeyLoader.loadFromPem(rsaPublicKeyPem, "DES"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unsupported algorithm");
-    }
-
     // ===== Helper methods =====
 
-    private AlibabaKmsCmkProvider createProvider(String algorithm) throws Exception {
+    private AlibabaKmsCmkProvider createProvider() throws Exception {
         return new AlibabaKmsCmkProvider(
-                "key-test", "ver-test", rsaKeyPair.getPublic(), createDummyClient(), algorithm);
+                "key-test", "ver-test", rsaKeyPair.getPublic(), createDummyClient());
     }
 
     private com.aliyun.kms20160120.Client createDummyClient() throws Exception {

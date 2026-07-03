@@ -20,13 +20,16 @@ import java.util.Objects;
  * for local wrap operations; unwrap always requires a KMS API call.
  * </p>
  * <p>
- * Local wrap uses RSAES-OAEP with SHA-256 for both the hash function and MGF1,
- * matching the Alibaba KMS {@code RSAES_OAEP_SHA_256} algorithm specification
- * (RFC 3447/PKCS#1). Note: Java's default {@code OAEPWithSHA-256AndMGF1Padding}
- * uses SHA-1 for MGF1, which is incompatible with KMS — an explicit
- * {@link OAEPParameterSpec} with {@link MGF1ParameterSpec#SHA256} is required.
+ * The wrapping algorithm is auto-detected from the public key type:
+ * <ul>
+ *   <li>RSA keys → RSAES-OAEP with SHA-256 hash + MGF1-SHA-256
+ *       (matching KMS {@code RSAES_OAEP_SHA_256}, RFC 3447/PKCS#1)</li>
+ *   <li>EC keys (SM2) → SM2 PKE (Phase 2)</li>
+ * </ul>
+ * Note: Java's default {@code OAEPWithSHA-256AndMGF1Padding} uses SHA-1 for MGF1,
+ * which is incompatible with KMS — an explicit {@link OAEPParameterSpec} with
+ * {@link MGF1ParameterSpec#SHA256} is required.
  * </p>
- * <p>Phase 1 supports RSA-OAEP-SHA256. SM2 support will be added in Phase 2.</p>
  */
 public class AlibabaKmsCmkProvider implements CmkProvider {
 
@@ -49,33 +52,37 @@ public class AlibabaKmsCmkProvider implements CmkProvider {
     private final String keyVersionId;
     private final PublicKey publicKey;
     private final com.aliyun.kms20160120.Client kmsClient;
-    private final String algorithm;
+    private final boolean isRsa;
 
     /**
      * Construct an Alibaba KMS CMK provider.
+     * <p>
+     * The wrapping algorithm is derived from the public key type:
+     * RSA keys use RSAES-OAEP-SHA256; EC keys (SM2) will use SM2 PKE (Phase 2).
+     * </p>
      *
      * @param keyId        the KMS CMK key identifier
      * @param keyVersionId the KMS CMK key version ID (may be {@code null} if resolved dynamically)
      * @param publicKey    the asymmetric public key for local wrap
      * @param kmsClient    the Alibaba Cloud KMS client for remote unwrap
-     * @param algorithm    the wrapping algorithm ({@code "RSA"} or {@code "SM2"})
      */
     public AlibabaKmsCmkProvider(String keyId, String keyVersionId, PublicKey publicKey,
-                                  com.aliyun.kms20160120.Client kmsClient, String algorithm) {
+                                  com.aliyun.kms20160120.Client kmsClient) {
         this.keyId = Objects.requireNonNull(keyId, "keyId must not be null");
         this.keyVersionId = keyVersionId;
         this.publicKey = Objects.requireNonNull(publicKey, "publicKey must not be null");
         this.kmsClient = Objects.requireNonNull(kmsClient, "kmsClient must not be null");
 
-        if (algorithm == null || algorithm.isBlank()) {
-            throw new IllegalArgumentException("algorithm must not be null or blank");
-        }
-        String normalized = algorithm.trim().toUpperCase();
-        if (!"RSA".equals(normalized) && !"SM2".equals(normalized)) {
+        String keyAlgorithm = publicKey.getAlgorithm();
+        if ("RSA".equals(keyAlgorithm)) {
+            this.isRsa = true;
+        } else if ("EC".equals(keyAlgorithm)) {
+            this.isRsa = false;
+        } else {
             throw new IllegalArgumentException(
-                    "Unsupported algorithm: '" + algorithm + "'. Supported values: RSA, SM2");
+                    "Unsupported public key algorithm: '" + keyAlgorithm
+                            + "'. Supported: RSA, EC (SM2)");
         }
-        this.algorithm = normalized;
     }
 
     @Override
@@ -85,7 +92,7 @@ public class AlibabaKmsCmkProvider implements CmkProvider {
 
     @Override
     public WrappedKey wrap(byte[] plaintextKey) {
-        if ("RSA".equals(algorithm)) {
+        if (isRsa) {
             return rsaWrap(plaintextKey);
         }
         throw new UnsupportedOperationException("SM2 wrap is not yet implemented (Phase 2)");

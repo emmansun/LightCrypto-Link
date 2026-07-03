@@ -36,14 +36,9 @@ public class AlibabaKmsCmkProperties {
     private String accessKeySecret;
 
     /**
-     * Asymmetric algorithm for key wrapping: {@code RSA} or {@code SM2}.
-     * Defaults to {@code RSA}.
-     */
-    private String algorithm = "RSA";
-
-    /**
      * Optional PEM-encoded public key (X.509 SubjectPublicKeyInfo).
      * If not set, the provider fetches the public key from KMS via GetPublicKey API at startup.
+     * The key type (RSA or EC/SM2) is auto-detected from the key material.
      */
     private String publicKey;
 }

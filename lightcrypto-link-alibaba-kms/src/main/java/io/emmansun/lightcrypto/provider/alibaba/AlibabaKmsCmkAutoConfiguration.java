@@ -21,6 +21,7 @@ import java.security.PublicKey;
  * <p>
  * Startup flow: {@code ListKeyVersions} resolves the keyVersionId, then
  * {@code GetPublicKey} fetches the PEM for local wrap operations.
+ * The key algorithm (RSA/SM2) is auto-detected from the public key material.
  * </p>
  */
 @Slf4j
@@ -40,18 +41,17 @@ public class AlibabaKmsCmkAutoConfiguration {
         // Step 1: Resolve keyVersionId via ListKeyVersions
         String keyVersionId = resolveKeyVersionId(properties, kmsClient);
 
-        // Step 2: Load/fetch public key for local wrap
+        // Step 2: Load/fetch public key for local wrap (algorithm auto-detected)
         PublicKey publicKey = resolvePublicKey(properties, kmsClient, keyVersionId);
 
-        log.info("Alibaba KMS CMK provider initialized: keyId={}, keyVersionId={}, algorithm={}",
-                properties.getKeyId(), keyVersionId, properties.getAlgorithm());
+        log.info("Alibaba KMS CMK provider initialized: keyId={}, keyVersionId={}, keyType={}",
+                properties.getKeyId(), keyVersionId, publicKey.getAlgorithm());
 
         return new AlibabaKmsCmkProvider(
                 properties.getKeyId(),
                 keyVersionId,
                 publicKey,
-                kmsClient,
-                properties.getAlgorithm());
+                kmsClient);
     }
 
     private void validateProperties(AlibabaKmsCmkProperties properties) {
@@ -117,8 +117,8 @@ public class AlibabaKmsCmkAutoConfiguration {
                                         String keyVersionId) {
         String pem = properties.getPublicKey();
         if (pem != null && !pem.isBlank()) {
-            log.info("Using pre-configured public key (algorithm={})", properties.getAlgorithm());
-            return PublicKeyLoader.loadFromPem(pem, properties.getAlgorithm());
+            log.info("Using pre-configured public key");
+            return PublicKeyLoader.loadFromPem(pem);
         }
 
         log.info("Fetching public key from KMS: keyId={}, keyVersionId={}",
@@ -130,8 +130,7 @@ public class AlibabaKmsCmkAutoConfiguration {
                             .setKeyVersionId(keyVersionId);
             com.aliyun.kms20160120.models.GetPublicKeyResponse response =
                     kmsClient.getPublicKey(request);
-            return PublicKeyLoader.loadFromPem(response.getBody().getPublicKey(),
-                    properties.getAlgorithm());
+            return PublicKeyLoader.loadFromPem(response.getBody().getPublicKey());
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {

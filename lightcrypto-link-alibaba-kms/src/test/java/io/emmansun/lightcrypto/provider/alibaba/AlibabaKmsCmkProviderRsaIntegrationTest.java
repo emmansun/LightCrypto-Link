@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>{@code ALIBABA_KMS_KEY_ID} — RSA CMK key ID</li>
  * </ul>
  *
- * <p>The {@code keyVersionId} is resolved automatically via {@code ListKeyVersions} API.</p>
+ * <p>The {@code keyVersionId} is resolved automatically via {@code ListKeyVersions} API.
+ * The key type is auto-detected from the public key material.</p>
  */
 @EnabledIfEnvironmentVariable(named = "ALIBABA_AK_ID", matches = ".+")
 class AlibabaKmsCmkProviderRsaIntegrationTest {
@@ -36,11 +37,11 @@ class AlibabaKmsCmkProviderRsaIntegrationTest {
         String keyVersionId = resolveKeyVersionId(kmsClient, keyId);
         assertThat(keyVersionId).isNotBlank();
 
-        // Fetch public key via GetPublicKey
+        // Fetch public key via GetPublicKey (algorithm auto-detected)
         PublicKey publicKey = fetchPublicKey(kmsClient, keyId, keyVersionId);
 
         AlibabaKmsCmkProvider provider =
-                new AlibabaKmsCmkProvider(keyId, keyVersionId, publicKey, kmsClient, "RSA");
+                new AlibabaKmsCmkProvider(keyId, keyVersionId, publicKey, kmsClient);
 
         byte[] plaintextKey = new byte[32];
         new SecureRandom().nextBytes(plaintextKey);
@@ -62,7 +63,7 @@ class AlibabaKmsCmkProviderRsaIntegrationTest {
         PublicKey publicKey = fetchPublicKey(kmsClient, keyId, keyVersionId);
 
         AlibabaKmsCmkProvider provider =
-                new AlibabaKmsCmkProvider(keyId, keyVersionId, publicKey, kmsClient, "RSA");
+                new AlibabaKmsCmkProvider(keyId, keyVersionId, publicKey, kmsClient);
 
         byte[] plaintextKey = new byte[32];
         new SecureRandom().nextBytes(plaintextKey);
@@ -102,6 +103,6 @@ class AlibabaKmsCmkProviderRsaIntegrationTest {
                 new com.aliyun.kms20160120.models.GetPublicKeyRequest()
                         .setKeyId(keyId)
                         .setKeyVersionId(keyVersionId));
-        return PublicKeyLoader.loadFromPem(resp.getBody().getPublicKey(), "RSA");
+        return PublicKeyLoader.loadFromPem(resp.getBody().getPublicKey());
     }
 }

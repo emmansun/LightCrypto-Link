@@ -8,8 +8,8 @@ import java.util.Base64;
 /**
  * Utility for loading X.509 SubjectPublicKeyInfo PEM-encoded public keys.
  * <p>
- * Supports RSA and EC (SM2) key types. The algorithm parameter determines which
- * {@link KeyFactory} is used to parse the key material.
+ * Supports RSA and EC (SM2) key types. The key algorithm is auto-detected
+ * from the X.509 encoded key material — no explicit algorithm parameter required.
  * </p>
  */
 public final class PublicKeyLoader {
@@ -23,28 +23,15 @@ public final class PublicKeyLoader {
 
     /**
      * Parse a PEM-encoded X.509 SubjectPublicKeyInfo public key.
+     * The key type (RSA or EC/SM2) is auto-detected from the ASN.1 structure.
      *
-     * @param pem       the PEM string (with or without header/footer lines)
-     * @param algorithm the key algorithm: {@code "RSA"} or {@code "SM2"}
+     * @param pem the PEM string (with or without header/footer lines)
      * @return the parsed {@link PublicKey}
-     * @throws IllegalArgumentException if the PEM is invalid or the algorithm is unsupported
+     * @throws IllegalArgumentException if the PEM is invalid or the key type is unrecognized
      */
-    public static PublicKey loadFromPem(String pem, String algorithm) {
+    public static PublicKey loadFromPem(String pem) {
         if (pem == null || pem.isBlank()) {
             throw new IllegalArgumentException("PEM string must not be null or blank");
-        }
-        if (algorithm == null || algorithm.isBlank()) {
-            throw new IllegalArgumentException("Algorithm must not be null or blank");
-        }
-
-        String keyFactoryAlgorithm;
-        String normalized = algorithm.trim().toUpperCase();
-        switch (normalized) {
-            case "RSA" -> keyFactoryAlgorithm = "RSA";
-            case "SM2" -> keyFactoryAlgorithm = "EC";
-            default -> throw new IllegalArgumentException(
-                    "Unsupported algorithm for public key loading: '" + algorithm
-                            + "'. Supported: RSA, SM2");
         }
 
         try {
@@ -55,13 +42,27 @@ public final class PublicKeyLoader {
 
             byte[] keyBytes = Base64.getDecoder().decode(base64Content);
             X509EncodedKeySpec keySpec = new X509EncodedKeySpec(keyBytes);
-            KeyFactory keyFactory = KeyFactory.getInstance(keyFactoryAlgorithm);
-            return keyFactory.generatePublic(keySpec);
+
+            // Try RSA first, then EC (SM2)
+            try {
+                return KeyFactory.getInstance("RSA").generatePublic(keySpec);
+            } catch (Exception ignored) {
+                // Not an RSA key, try EC
+            }
+
+            try {
+                return KeyFactory.getInstance("EC").generatePublic(keySpec);
+            } catch (Exception ignored) {
+                // Not an EC key either
+            }
+
+            throw new IllegalArgumentException(
+                    "Unsupported public key type: key is neither RSA nor EC (SM2)");
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
             throw new IllegalArgumentException(
-                    "Failed to parse " + algorithm + " public key PEM: " + e.getMessage(), e);
+                    "Failed to parse public key PEM: " + e.getMessage(), e);
         }
     }
 }

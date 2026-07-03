@@ -88,7 +88,6 @@ lcl:
       access-key-secret: ${ALIBABA_AK_SECRET}
       endpoint: ${ALIBABA_KMS_ENDPOINT:kms.cn-shenzhen.aliyuncs.com}
       key-id: ${ALIBABA_KMS_KEY_ID}
-      algorithm: RSA
 ```
 
 > **Production**: always inject secrets via environment variables, K8s Secrets, or Config Service. Never commit them.

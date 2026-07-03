@@ -9,7 +9,6 @@ lcl:
       endpoint: ${ALIBABA_KMS_ENDPOINT:kms.cn-shenzhen.aliyuncs.com}
       # region-id: ${ALIBABA_KMS_REGION:cn-shenzhen}
       key-id: ${ALIBABA_KMS_KEY_ID}
-      algorithm: RSA
 
 # Embedded MongoDB (for local demo; remove if using external MongoDB)
 de:
