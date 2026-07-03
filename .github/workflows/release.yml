@@ -51,3 +51,5 @@ jobs:
           generate_release_notes: true
           files: |
             lightcrypto-link-spring-boot-starter/target/*.jar
+            lightcrypto-link-azure-kms/target/*.jar
+            lightcrypto-link-alibaba-kms/target/*.jar
