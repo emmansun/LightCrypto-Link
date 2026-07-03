@@ -39,7 +39,7 @@
         <!-- Plugin versions -->
         <checkstyle.version>10.17.0</checkstyle.version>
         <spotbugs.version>4.8.6.8</spotbugs.version>
-        <jacoco.version>0.8.12</jacoco.version>
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
     <!-- GitHub Packages distribution -->
