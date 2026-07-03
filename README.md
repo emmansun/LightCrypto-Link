@@ -28,7 +28,7 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 
 ```xml
 <dependency>
-    <groupId>io.emmansun</groupId>
+    <groupId>io.github.emmansun</groupId>
     <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
     <version>1.0.0</version>
 </dependency>
@@ -41,14 +41,14 @@ For cloud KMS integration, add the corresponding provider module:
 ```xml
 <!-- Azure Key Vault -->
 <dependency>
-    <groupId>io.emmansun</groupId>
+    <groupId>io.github.emmansun</groupId>
     <artifactId>lightcrypto-link-azure-kms</artifactId>
     <version>1.0.0</version>
 </dependency>
 
 <!-- Alibaba Cloud KMS -->
 <dependency>
-    <groupId>io.emmansun</groupId>
+    <groupId>io.github.emmansun</groupId>
     <artifactId>lightcrypto-link-alibaba-kms</artifactId>
     <version>1.0.0</version>
 </dependency>

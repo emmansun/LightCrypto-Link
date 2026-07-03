@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.emmansun</groupId>
+        <groupId>io.github.emmansun</groupId>
         <artifactId>lightcrypto-link-examples</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
@@ -19,13 +19,13 @@
     <dependencies>
         <!-- LCL Starter -->
         <dependency>
-            <groupId>io.emmansun</groupId>
+            <groupId>io.github.emmansun</groupId>
             <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
         </dependency>
 
         <!-- LCL Azure Key Vault CMK Provider -->
         <dependency>
-            <groupId>io.emmansun</groupId>
+            <groupId>io.github.emmansun</groupId>
             <artifactId>lightcrypto-link-azure-kms</artifactId>
         </dependency>
 
