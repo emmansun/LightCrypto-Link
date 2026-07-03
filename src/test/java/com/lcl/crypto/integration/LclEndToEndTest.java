@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,7 +22,8 @@ import static org.assertj.core.api.Assertions.*;
  * Covers tasks 6.6-6.10 (KeyVaultService) and 11.1-11.9 (E2E).
  */
 @SpringBootTest(classes = IntTestApplication.class)
-@ActiveProfiles(resolver = CiProfileResolver.class)
+@ActiveProfiles("test")
+@ContextConfiguration(initializers = MongoCiInitializer.class)
 @DirtiesContext
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class LclEndToEndTest {

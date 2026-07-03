@@ -14,6 +14,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -22,7 +23,8 @@ import static org.assertj.core.api.Assertions.*;
  * and subsequent startup scenarios in the multi-DEK architecture.
  */
 @SpringBootTest(classes = IntTestApplication.class)
-@ActiveProfiles(resolver = CiProfileResolver.class)
+@ActiveProfiles("test")
+@ContextConfiguration(initializers = MongoCiInitializer.class)
 @DirtiesContext
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class KeyVaultCorruptionTest {
