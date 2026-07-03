@@ -1,0 +1,15 @@
+name: azure-keyvault-cmk
+archivedAt: 2026-07-03
+schema: spec-driven
+artifacts:
+  - proposal.md
+  - design.md
+  - specs/azure-keyvault-cmk/spec.md
+  - tasks.md
+summary: |
+  Azure Key Vault CMK Provider implementation.
+  Local RSA-OAEP wrap (zero network overhead) + remote CryptographyClient.unwrapKey().
+  Key version auto-resolved via getKey() at startup.
+  18/18 tests passed (13 unit + 5 integration). Example module verified end-to-end.
+schema: spec-driven
+created: 2026-07-03
