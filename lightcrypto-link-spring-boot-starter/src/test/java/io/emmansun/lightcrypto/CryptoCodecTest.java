@@ -1,8 +1,11 @@
 package io.emmansun.lightcrypto;
 
+import io.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.emmansun.lightcrypto.exception.CryptoException;
 import io.emmansun.lightcrypto.service.CryptoCodec;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.charset.StandardCharsets;
 
@@ -90,5 +93,69 @@ class CryptoCodecTest extends LclTestBase {
         // Swapped keys produce different binding
         String b3 = codec.computeBinding(TEST_DEK, TEST_HMAC_KEY);
         assertThat(b1).isNotEqualTo(b3);
+    }
+
+    @ParameterizedTest
+    @EnumSource(SymmetricAlgorithm.class)
+    void encryptDecryptRoundtripPerAlgorithm(SymmetricAlgorithm algorithm) {
+        byte[] plaintext = "Hello, World!".getBytes(StandardCharsets.UTF_8);
+        byte[] encrypted = codec.encrypt(TEST_DEK, plaintext, algorithm);
+        byte[] decrypted = codec.decrypt(TEST_DEK, encrypted, algorithm);
+        assertThat(decrypted).isEqualTo(plaintext);
+    }
+
+    @ParameterizedTest
+    @EnumSource(SymmetricAlgorithm.class)
+    void kcvPerAlgorithm(SymmetricAlgorithm algorithm) {
+        String kcv1 = codec.computeKcv(TEST_DEK, algorithm);
+        String kcv2 = codec.computeKcv(TEST_DEK, algorithm);
+        assertThat(kcv1).isEqualTo(kcv2);
+        assertThat(kcv1).isNotBlank();
+    }
+
+    @Test
+    void kcvVariesByAlgorithm() {
+        String kcvGcm = codec.computeKcv(TEST_DEK, SymmetricAlgorithm.AES_256_GCM);
+        String kcvCbc = codec.computeKcv(TEST_DEK, SymmetricAlgorithm.AES_256_CBC);
+        String kcvSm4Gcm = codec.computeKcv(TEST_DEK, SymmetricAlgorithm.SM4_GCM);
+        String kcvSm4Cbc = codec.computeKcv(TEST_DEK, SymmetricAlgorithm.SM4_CBC);
+
+        assertThat(kcvGcm).isNotEqualTo(kcvCbc);
+        assertThat(kcvGcm).isNotEqualTo(kcvSm4Gcm);
+        assertThat(kcvGcm).isNotEqualTo(kcvSm4Cbc);
+        assertThat(kcvCbc).isNotEqualTo(kcvSm4Gcm);
+        assertThat(kcvSm4Gcm).isNotEqualTo(kcvSm4Cbc);
+    }
+
+    @Test
+    void algorithmMismatchThrowsException() {
+        byte[] plaintext = "secret".getBytes(StandardCharsets.UTF_8);
+
+        // Encrypt with AES-256-GCM, try to decrypt with AES-256-CBC
+        byte[] encrypted = codec.encrypt(TEST_DEK, plaintext, SymmetricAlgorithm.AES_256_GCM);
+        assertThatThrownBy(() -> codec.decrypt(TEST_DEK, encrypted, SymmetricAlgorithm.AES_256_CBC))
+                .isInstanceOf(CryptoException.class);
+
+        // Encrypt with SM4-GCM, try to decrypt with SM4-CBC
+        byte[] encryptedSm4 = codec.encrypt(TEST_DEK, plaintext, SymmetricAlgorithm.SM4_GCM);
+        assertThatThrownBy(() -> codec.decrypt(TEST_DEK, encryptedSm4, SymmetricAlgorithm.SM4_CBC))
+                .isInstanceOf(CryptoException.class);
+    }
+
+    @Test
+    void deprecatedMethodsUseDefaultAesGcm() {
+        byte[] plaintext = "test".getBytes(StandardCharsets.UTF_8);
+
+        // Old methods should work the same as AES-256-GCM
+        @SuppressWarnings("deprecation")
+        byte[] encrypted = codec.encrypt(TEST_DEK, plaintext);
+        @SuppressWarnings("deprecation")
+        byte[] decrypted = codec.decrypt(TEST_DEK, encrypted);
+        assertThat(decrypted).isEqualTo(plaintext);
+
+        @SuppressWarnings("deprecation")
+        String kcv = codec.computeKcv(TEST_DEK);
+        String kcvExplicit = codec.computeKcv(TEST_DEK, SymmetricAlgorithm.AES_256_GCM);
+        assertThat(kcv).isEqualTo(kcvExplicit);
     }
 }
