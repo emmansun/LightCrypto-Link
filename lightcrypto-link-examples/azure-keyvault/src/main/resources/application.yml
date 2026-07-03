@@ -1,0 +1,24 @@
+# LightCrypto-Link configuration — Azure Key Vault
+lcl:
+  crypto:
+    enabled: true
+    azure:
+      vault-uri: ${AZURE_VAULT_URI}
+      key-name: ${AZURE_KEY_NAME}
+      tenant-id: ${AZURE_TENANT_ID}
+      client-id: ${AZURE_CLIENT_ID}
+      client-secret: ${AZURE_CLIENT_SECRET}
+      # Optional: provide PEM for local wrap (skips getKey() fetch)
+      # public-key: ${AZURE_PUBLIC_KEY}
+
+# Embedded MongoDB (for local demo; remove if using external MongoDB)
+de:
+  flapdoodle:
+    mongodb:
+      embedded:
+        version: 6.0.12
+
+spring:
+  data:
+    mongodb:
+      database: lcl-azure-keyvault-demo

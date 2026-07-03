@@ -1,0 +1,24 @@
+# LightCrypto-Link configuration — Alibaba Cloud KMS
+lcl:
+  crypto:
+    enabled: true
+    alibaba:
+      access-key-id: ${ALIBABA_AK_ID}
+      access-key-secret: ${ALIBABA_AK_SECRET}
+      # Use endpoint for VPC/VPN access, or region-id for public network:
+      endpoint: ${ALIBABA_KMS_ENDPOINT:kms.cn-shenzhen.aliyuncs.com}
+      # region-id: ${ALIBABA_KMS_REGION:cn-shenzhen}
+      key-id: ${ALIBABA_KMS_KEY_ID}
+      algorithm: RSA
+
+# Embedded MongoDB (for local demo; remove if using external MongoDB)
+de:
+  flapdoodle:
+    mongodb:
+      embedded:
+        version: 6.0.12
+
+spring:
+  data:
+    mongodb:
+      database: lcl-alibaba-kms-demo
