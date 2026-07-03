@@ -23,13 +23,12 @@
             <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
         </dependency>
 
-        <!-- TODO: Add Alibaba Cloud KMS SDK when implementing v2
+        <!-- Alibaba Cloud KMS SDK -->
         <dependency>
             <groupId>com.aliyun</groupId>
-            <artifactId>alibabacloud-kms20160120</artifactId>
-            <version>1.0.12</version>
+            <artifactId>kms20160120</artifactId>
+            <version>1.2.3</version>
         </dependency>
-        -->
 
         <!-- Spring Boot (for auto-configuration) -->
         <dependency>
@@ -43,6 +42,13 @@
             <artifactId>lombok</artifactId>
             <version>1.18.32</version>
             <scope>provided</scope>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

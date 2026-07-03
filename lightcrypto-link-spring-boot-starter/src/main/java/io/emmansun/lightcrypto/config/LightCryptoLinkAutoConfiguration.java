@@ -9,11 +9,11 @@ import io.emmansun.lightcrypto.query.CryptoMongoQueryCreator;
 import io.emmansun.lightcrypto.query.CryptoMongoRepositoryFactoryBean;
 import io.emmansun.lightcrypto.service.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
@@ -26,7 +26,7 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
 import java.security.Security;
 import java.util.HexFormat;
 
-@Configuration
+@AutoConfiguration
 @ConditionalOnProperty(prefix = "lcl.crypto", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(CryptoProperties.class)
 @EnableMongoRepositories(
@@ -43,6 +43,7 @@ public class LightCryptoLinkAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "lcl.crypto", name = "cmk")
     public CmkProvider cmkProvider(CryptoProperties properties) {
         byte[] cmk = HexFormat.of().parseHex(properties.getCmk());
         return new LocalSymmetricCmkProvider(cmk);
