@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.*;
  * Covers tasks 6.6-6.10 (KeyVaultService) and 11.1-11.9 (E2E).
  */
 @SpringBootTest(classes = IntTestApplication.class)
-@ActiveProfiles("test")
+@ActiveProfiles(resolver = CiProfileResolver.class)
 @DirtiesContext
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class LclEndToEndTest {

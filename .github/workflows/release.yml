@@ -12,6 +12,12 @@ jobs:
       contents: write
       packages: write
 
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

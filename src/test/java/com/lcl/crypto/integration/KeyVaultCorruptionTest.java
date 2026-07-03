@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.*;
  * and subsequent startup scenarios in the multi-DEK architecture.
  */
 @SpringBootTest(classes = IntTestApplication.class)
-@ActiveProfiles("test")
+@ActiveProfiles(resolver = CiProfileResolver.class)
 @DirtiesContext
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class KeyVaultCorruptionTest {
