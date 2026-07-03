@@ -63,6 +63,7 @@ lcl:
   crypto:
     cmk: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2  # 64 hex chars = 32 bytes
     enabled: true
+    algorithm: AES_256_GCM  # global default algorithm (optional)
 ```
 
 **Azure Key Vault (production):**
@@ -101,26 +102,31 @@ public class User {
     private String name;                         // plain text
 
     @Encrypted(blindIndex = true)
-    private String phone;                        // encrypted (AES-256-GCM, default) + queryable
+    private String phone;                        // encrypted (global default) + queryable
 
     @Encrypted(algorithm = SymmetricAlgorithm.SM4_GCM)
-    private String idCard;                       // encrypted with SM4-GCM
+    private String idCard;                       // encrypted with SM4-GCM (per-field override)
 
     @Encrypted
     private Integer age;                         // encrypted, no query
 }
 ```
 
+> `@Encrypted` without `algorithm` uses the global default from `lcl.crypto.algorithm` (default: `AES_256_GCM`).
+> Override per-field with `algorithm = SymmetricAlgorithm.XXX`.
+
 **Supported algorithms:**
 
 | Algorithm | Key Size | IV Size | Mode | Provider |
 |---|---|---|---|---|
-| `AES_256_GCM` *(default)* | 32 bytes | 12 bytes | GCM/NoPadding | JDK |
+| `AES_256_GCM` *(global default)* | 32 bytes | 12 bytes | GCM/NoPadding | JDK |
 | `AES_256_CBC` | 32 bytes | 16 bytes | CBC/PKCS5Padding | JDK |
 | `SM4_GCM` | 16 bytes* | 12 bytes | GCM/NoPadding | Bouncy Castle |
 | `SM4_CBC` | 16 bytes* | 16 bytes | CBC/PKCS5Padding | Bouncy Castle |
 
 > *SM4 uses the first 16 bytes of the 32-byte DEK.
+>
+> Change the global default via `lcl.crypto.algorithm`, or override per-field with `@Encrypted(algorithm = ...)`.
 
 ### 4. Use Normally
 
