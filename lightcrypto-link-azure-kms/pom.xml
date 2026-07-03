@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>LightCrypto-Link :: Azure Key Vault CMK Provider</name>
-    <description>Azure Key Vault CMK provider for LightCrypto-Link (v2 roadmap).</description>
+    <description>Azure Key Vault CMK provider for LightCrypto-Link.</description>
 
     <dependencies>
         <!-- LCL Starter (for CmkProvider SPI) -->
@@ -23,13 +23,19 @@
             <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
         </dependency>
 
-        <!-- TODO: Add Azure Key Vault SDK when implementing v2
+        <!-- Azure Key Vault SDK -->
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-security-keyvault-keys</artifactId>
-            <version>4.8.2</version>
+            <version>4.11.0</version>
         </dependency>
-        -->
+
+        <!-- Azure Identity (for DefaultAzureCredential / ClientSecretCredential) -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-identity</artifactId>
+            <version>1.14.2</version>
+        </dependency>
 
         <!-- Spring Boot (for auto-configuration) -->
         <dependency>
@@ -44,13 +50,11 @@
             <version>1.18.32</version>
             <scope>provided</scope>
         </dependency>
-
-        <!-- Skip deploy for v2 modules -->
+        <!-- Test -->
         <dependency>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-deploy-plugin</artifactId>
-            <version>3.1.2</version>
-            <scope>provided</scope>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -69,14 +73,6 @@
                             <version>1.18.32</version>
                         </path>
                     </annotationProcessorPaths>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-deploy-plugin</artifactId>
-                <version>3.1.2</version>
-                <configuration>
-                    <skip>true</skip>
                 </configuration>
             </plugin>
         </plugins>

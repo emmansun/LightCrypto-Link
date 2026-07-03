@@ -1,67 +1,91 @@
 package io.emmansun.lightcrypto.provider.azure;
 
+import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
+import com.azure.security.keyvault.keys.cryptography.models.KeyWrapAlgorithm;
+import com.azure.security.keyvault.keys.cryptography.models.UnwrapResult;
+import io.emmansun.lightcrypto.exception.CryptoException;
 import io.emmansun.lightcrypto.model.WrappedKey;
 import io.emmansun.lightcrypto.provider.CmkProvider;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource;
+import java.security.PublicKey;
+import java.security.spec.MGF1ParameterSpec;
+
 /**
- * Azure Key Vault CMK provider — wraps/unwraps DEKs using RSA-OAEP via Azure Key Vault.
+ * CMK Provider backed by Azure Key Vault using asymmetric RSA-OAEP-256.
  * <p>
- * This is a v2 roadmap skeleton. Actual implementation requires:
- * <ul>
- *   <li>azure-security-keyvault-keys SDK</li>
- *   <li>CryptographyClient wrap/unwrap with RSA-OAEP-256</li>
- *   <li>Azure AD authentication (DefaultAzureCredential or service principal)</li>
- * </ul>
- * </p>
- *
- * <h3>Configuration</h3>
- * <pre>
- * lcl:
- *   crypto:
- *     azure:
- *       vault-uri: https://myvault.vault.azure.net
- *       key-name: my-cmk-key
- * </pre>
+ * Local wrap uses RSA-OAEP with SHA-256 (public key), remote unwrap calls Azure Key Vault API.
  */
 public class AzureKeyVaultCmkProvider implements CmkProvider {
 
-    private static final String PROVIDER_ID = "azure-keyvault";
-    private static final String ALGORITHM = "RSA-OAEP-256";
-
-    private final String vaultUri;
-    private final String keyName;
+    private final PublicKey publicKey;
+    private final CryptographyClient cryptoClient;
+    private final String algorithm;
     private final String keyVersion;
 
-    public AzureKeyVaultCmkProvider(String vaultUri, String keyName, String keyVersion) {
-        this.vaultUri = vaultUri;
-        this.keyName = keyName;
+    /**
+     * Constructs a new Azure Key Vault asymmetric CMK provider.
+     *
+     * @param publicKey    RSA public key for local wrap (from PEM or auto-fetched via getKey())
+     * @param cryptoClient Azure Key Vault CryptographyClient for unwrap
+     * @param algorithm    wrap algorithm identifier (e.g. "RSA-OAEP-256")
+     * @param keyVersion   key version auto-resolved from getKey()
+     */
+    public AzureKeyVaultCmkProvider(PublicKey publicKey,
+                                    CryptographyClient cryptoClient,
+                                    String algorithm,
+                                    String keyVersion) {
+        if (publicKey == null) {
+            throw new IllegalArgumentException("publicKey must not be null");
+        }
+        if (cryptoClient == null) {
+            throw new IllegalArgumentException("cryptoClient must not be null");
+        }
+        this.publicKey = publicKey;
+        this.cryptoClient = cryptoClient;
+        this.algorithm = algorithm;
         this.keyVersion = keyVersion;
     }
 
     @Override
-    public String getProviderId() {
-        return PROVIDER_ID;
-    }
-
-    @Override
-    public WrappedKey wrap(byte[] plaintextKey) {
-        // TODO: Implement Azure Key Vault wrap using CryptographyClient
-        // 1. Build CryptographyClient with keyIdentifier = vaultUri/keys/keyName[/keyVersion]
-        // 2. Call wrapKey(KeyWrapAlgorithm.RSA_OAEP_256, plaintextKey)
-        // 3. Return WrappedKey(result.getEncryptedKey(), "RSA-OAEP-256")
-        throw new UnsupportedOperationException(
-                "Azure Key Vault provider is a v2 roadmap feature. " +
-                "Use LocalSymmetricCmkProvider (lcl.crypto.cmk) for production.");
+    public WrappedKey wrap(byte[] key) {
+        if (key == null || key.length == 0) {
+            throw new IllegalArgumentException("Key to wrap must not be null or empty");
+        }
+        try {
+            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding");
+            OAEPParameterSpec oaepParams = new OAEPParameterSpec(
+                    "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
+            cipher.init(Cipher.WRAP_MODE, publicKey, oaepParams);
+            byte[] ciphertext = cipher.wrap(new javax.crypto.spec.SecretKeySpec(key, "AES"));
+            return new WrappedKey(ciphertext, algorithm);
+        } catch (Exception e) {
+            throw new CryptoException("Failed to wrap key with RSA-OAEP-256", e);
+        }
     }
 
     @Override
     public byte[] unwrap(WrappedKey wrappedKey) {
-        // TODO: Implement Azure Key Vault unwrap using CryptographyClient
-        // 1. Build CryptographyClient with keyIdentifier
-        // 2. Call unwrapKey(KeyWrapAlgorithm.RSA_OAEP_256, wrappedKey.ciphertext())
-        // 3. Return result.getKey()
-        throw new UnsupportedOperationException(
-                "Azure Key Vault provider is a v2 roadmap feature. " +
-                "Use LocalSymmetricCmkProvider (lcl.crypto.cmk) for production.");
+        if (wrappedKey == null) {
+            throw new IllegalArgumentException("WrappedKey must not be null");
+        }
+        try {
+            UnwrapResult result = cryptoClient.unwrapKey(KeyWrapAlgorithm.RSA_OAEP_256, wrappedKey.ciphertext());
+            return result.getKey();
+        } catch (Exception e) {
+            throw new CryptoException("Failed to unwrap key via Azure Key Vault", e);
+        }
+    }
+
+    @Override
+    public String getProviderId() {
+        return "azure-keyvault";
+    }
+
+    /** Returns the auto-resolved key version. */
+    public String getKeyVersion() {
+        return keyVersion;
     }
 }
