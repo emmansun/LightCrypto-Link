@@ -34,7 +34,7 @@
 
         <!-- Dependency versions -->
         <spring-boot.version>3.2.5</spring-boot.version>
-        <bouncycastle.version>1.78.1</bouncycastle.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
 
         <!-- Plugin versions -->
         <checkstyle.version>10.17.0</checkstyle.version>
