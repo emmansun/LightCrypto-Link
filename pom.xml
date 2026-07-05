@@ -38,7 +38,7 @@
 
         <!-- Plugin versions -->
         <checkstyle.version>10.17.0</checkstyle.version>
-        <spotbugs.version>4.8.6.8</spotbugs.version>
+        <spotbugs.version>4.10.2.0</spotbugs.version>
         <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
