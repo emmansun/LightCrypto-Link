@@ -1,5 +1,6 @@
 package io.github.emmansun.lightcrypto.example.basiccrud;
 
+import io.github.emmansun.lightcrypto.service.FieldCryptoService;
 import org.bson.Document;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -9,17 +10,22 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 
 /**
- * Demonstrates LightCrypto-Link transparent encryption, decryption, and blind index queries.
+ * Demonstrates LightCrypto-Link transparent encryption, decryption, blind index queries,
+ * and manual decryption via FieldCryptoService for raw Documents.
  */
 @Component
 public class DemoRunner implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
+    private final FieldCryptoService fieldCryptoService;
 
-    public DemoRunner(UserRepository userRepository, MongoTemplate mongoTemplate) {
+    public DemoRunner(UserRepository userRepository,
+                      MongoTemplate mongoTemplate,
+                      FieldCryptoService fieldCryptoService) {
         this.userRepository = userRepository;
         this.mongoTemplate = mongoTemplate;
+        this.fieldCryptoService = fieldCryptoService;
     }
 
     @Override
@@ -63,9 +69,18 @@ public class DemoRunner implements CommandLineRunner {
             System.out.println("  name      = " + rawDoc.getString("name") + "  (plain text, not encrypted)");
             System.out.println("  phone     = " + rawDoc.get("phone") + "  (encrypted sub-document)");
             System.out.println("  age       = " + rawDoc.get("age") + "  (encrypted sub-document)");
-            System.out.println("  birthDate = " + rawDoc.get("birthDate") + "  (encrypted sub-document)");
+            System.out.println("  birthDate = " + rawDoc.get("birthDate") + "  (encrypted sub-document)\n");
+
+            // 5. Manual decryption — use FieldCryptoService when you bypass the Repository
+            //    (e.g. aggregation pipelines, native driver queries, data migration scripts)
+            System.out.println("[MANUAL DECRYPT] Using FieldCryptoService.decryptDocument():");
+            fieldCryptoService.decryptDocument(rawDoc, User.class);
+            System.out.println("  phone     = " + rawDoc.get("phone") + "  (decrypted manually)");
+            System.out.println("  age       = " + rawDoc.get("age") + "  (decrypted manually)");
+            System.out.println("  birthDate = " + rawDoc.get("birthDate") + "  (decrypted manually)");
+            System.out.println("  Useful for: aggregation pipelines, MongoCollection queries, data migration, debugging.\n");
         }
 
-        System.out.println("\n=== Demo complete ===");
+        System.out.println("=== Demo complete ===");
     }
 }

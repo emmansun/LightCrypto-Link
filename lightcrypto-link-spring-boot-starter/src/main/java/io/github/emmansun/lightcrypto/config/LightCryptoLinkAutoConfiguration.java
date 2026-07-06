@@ -14,7 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Lazy;
+
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -83,6 +83,14 @@ public class LightCryptoLinkAutoConfiguration {
         return new CryptoBeforeSaveListener(metadataCache, cryptoCodec, typeSerializer, keyVaultService);
     }
 
+    @Bean
+    public FieldCryptoService fieldCryptoService(EntityMetadataCache metadataCache,
+                                                 CryptoCodec cryptoCodec,
+                                                 TypeDeserializer typeDeserializer,
+                                                 KeyVaultService keyVaultService) {
+        return new FieldCryptoService(metadataCache, cryptoCodec, typeDeserializer, keyVaultService);
+    }
+
     /**
      * Custom MappingMongoConverter — decrypts @Encrypted fields during read().
      * The @ConditionalOnMissingBean(MongoConverter.class) in Spring Boot's
@@ -93,12 +101,9 @@ public class LightCryptoLinkAutoConfiguration {
             MongoDatabaseFactory mongoDbFactory,
             MappingContext<? extends MongoPersistentEntity<?>, MongoPersistentProperty> mappingContext,
             EntityMetadataCache metadataCache,
-            CryptoCodec cryptoCodec,
-            TypeDeserializer typeDeserializer,
-            @Lazy KeyVaultService keyVaultService) {
+            FieldCryptoService fieldCryptoService) {
         return new CryptoMappingMongoConverter(
-                mongoDbFactory, mappingContext,
-                metadataCache, cryptoCodec, typeDeserializer, keyVaultService);
+                mongoDbFactory, mappingContext, metadataCache, fieldCryptoService);
     }
 
     @Bean

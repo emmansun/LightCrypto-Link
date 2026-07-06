@@ -4,6 +4,7 @@ import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.listener.CryptoMappingMongoConverter;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.service.CryptoCodec;
+import io.github.emmansun.lightcrypto.service.FieldCryptoService;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeDeserializer;
 import io.github.emmansun.lightcrypto.service.TypeSerializer;
@@ -37,7 +38,8 @@ class CryptoBeforeConvertListenerTest extends LclTestBase {
         codec = createTestCryptoCodec();
         TypeDeserializer des = createTestTypeDeserializer();
         KeyVaultService vs = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY);
-        converter = new TestableConverter(mc, codec, des, vs);
+        FieldCryptoService fieldCryptoService = new FieldCryptoService(mc, codec, des, vs);
+        converter = new TestableConverter(mc, fieldCryptoService);
     }
 
     private static final String TEST_KID = "v1-test0001";
@@ -126,9 +128,8 @@ class CryptoBeforeConvertListenerTest extends LclTestBase {
      * Test subclass that exposes decryptFields() for direct unit testing.
      */
     static class TestableConverter extends CryptoMappingMongoConverter {
-        TestableConverter(EntityMetadataCache mc, CryptoCodec codec,
-                          TypeDeserializer des, KeyVaultService vs) {
-            super(createMockFactory(), mock(MappingContext.class), mc, codec, des, vs);
+        TestableConverter(EntityMetadataCache mc, FieldCryptoService fieldCryptoService) {
+            super(createMockFactory(), mock(MappingContext.class), mc, fieldCryptoService);
         }
 
         private static MongoDatabaseFactory createMockFactory() {
