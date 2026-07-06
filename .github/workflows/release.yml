@@ -95,8 +95,11 @@ jobs:
           TAG=${GITHUB_REF_NAME#v}
           mvn -B versions:set -DnewVersion=$TAG -DgenerateBackupPoms=false
 
+      - name: Install parent POM locally
+        run: mvn -B -N install -DskipTests
+
       - name: Deploy to Maven Central
-        run: mvn -B clean deploy -DskipTests -Pcentral
+        run: mvn -B clean deploy -DskipTests -Pcentral -pl .,lightcrypto-link-spring-boot-starter,lightcrypto-link-azure-kms,lightcrypto-link-alibaba-kms
         env:
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
