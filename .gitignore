@@ -5,6 +5,7 @@ pom.xml.versionsBackup
 pom.xml.next
 release.properties
 dependency-reduced-pom.xml
+.flattened-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 # https://maven.apache.org/tools/wrapper/#Usage_with_or_without_Binary_JAR
