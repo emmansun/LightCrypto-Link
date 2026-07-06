@@ -63,3 +63,41 @@ jobs:
             lightcrypto-link-spring-boot-starter/target/*.jar
             lightcrypto-link-azure-kms/target/*.jar
             lightcrypto-link-alibaba-kms/target/*.jar
+
+  deploy-central:
+    runs-on: ubuntu-latest
+    needs: release
+
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up JDK 17 with GPG and Central credentials
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+          server-id: central
+          server-username: CENTRAL_TOKEN_USERNAME
+          server-password: CENTRAL_TOKEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_SIGNING_KEY }}
+          gpg-passphrase: GPG_SIGNING_KEY_PASSWORD
+
+      - name: Set release version
+        run: |
+          TAG=${GITHUB_REF_NAME#v}
+          mvn -B versions:set -DnewVersion=$TAG -DgenerateBackupPoms=false
+
+      - name: Deploy to Maven Central
+        run: mvn -B clean deploy -DskipTests -Pcentral
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          GPG_SIGNING_KEY_PASSWORD: ${{ secrets.GPG_SIGNING_KEY_PASSWORD }}

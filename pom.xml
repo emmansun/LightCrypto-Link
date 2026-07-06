@@ -13,6 +13,22 @@
     <description>A pure Java, lightweight application-level field encryption component with blind index and multi-KMS/SM-crypto support for Spring Boot MongoDB.</description>
     <url>https://github.com/emmansun/LightCrypto-Link</url>
 
+    <developers>
+        <developer>
+            <id>emmansun</id>
+            <name>Sun Emin</name>
+            <email>emmansun@users.noreply.github.com</email>
+            <url>https://github.com/emmansun</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/emmansun/LightCrypto-Link.git</connection>
+        <developerConnection>scm:git:https://github.com/emmansun/LightCrypto-Link.git</developerConnection>
+        <url>https://github.com/emmansun/LightCrypto-Link</url>
+        <tag>HEAD</tag>
+    </scm>
+
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
@@ -102,6 +118,15 @@
     </dependencyManagement>
 
     <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>
@@ -127,4 +152,44 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+        <profile>
+            <id>central</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.7.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
