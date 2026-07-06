@@ -9,6 +9,7 @@ import io.github.emmansun.lightcrypto.query.CryptoMongoQueryCreator;
 import io.github.emmansun.lightcrypto.query.CryptoMongoRepositoryFactoryBean;
 import io.github.emmansun.lightcrypto.service.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -113,5 +114,20 @@ public class LightCryptoLinkAutoConfiguration {
                                                            TypeSerializer typeSerializer,
                                                            KeyVaultService keyVaultService) {
         return new CryptoMongoQueryCreator(metadataCache, cryptoCodec, typeSerializer, keyVaultService);
+    }
+
+    /**
+     * Pre-warms the EntityMetadataCache at startup by scanning all registered
+     * MongoDB entity classes, eliminating cold-start latency on first request.
+     */
+    @Bean
+    public SmartInitializingSingleton entityMetadataCachePreWarmer(
+            EntityMetadataCache metadataCache,
+            MappingContext<? extends MongoPersistentEntity<?>, MongoPersistentProperty> mappingContext) {
+        return () -> {
+            for (MongoPersistentEntity<?> entity : mappingContext.getPersistentEntities()) {
+                metadataCache.preWarm(entity.getType());
+            }
+        };
     }
 }

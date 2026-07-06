@@ -6,6 +6,8 @@ import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,6 +16,10 @@ import static io.github.emmansun.lightcrypto.service.TypeSerializer.isSupported;
 
 /**
  * Entity metadata cache — scans @Encrypted annotated fields and caches the results.
+ * <p>
+ * On first access per entity class, all {@code @Encrypted} fields are discovered,
+ * validated, and converted into pre-bound {@link MethodHandle} getters. Subsequent
+ * accesses return the cached metadata list with zero reflection overhead.
  */
 public class EntityMetadataCache {
 
@@ -38,8 +44,22 @@ public class EntityMetadataCache {
         return !getEncryptedFields(entityClass).isEmpty();
     }
 
+    /**
+     * Pre-warm the cache for the given entity classes.
+     * Call this at startup to eliminate cold-start latency on first request.
+     *
+     * @param entityClasses the entity classes to pre-scan
+     */
+    public void preWarm(Class<?>... entityClasses) {
+        for (Class<?> clazz : entityClasses) {
+            getEncryptedFields(clazz);
+        }
+    }
+
     private List<EncryptedFieldMetadata> scanFields(Class<?> entityClass) {
         List<EncryptedFieldMetadata> result = new ArrayList<>();
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
         for (Field field : getAllFields(entityClass)) {
             Encrypted encrypted = field.getAnnotation(Encrypted.class);
             if (encrypted == null) continue;
@@ -51,7 +71,15 @@ public class EntityMetadataCache {
                                 "' has unsupported type: " + fieldType.getName());
             }
 
-            field.setAccessible(true);
+            MethodHandle getter;
+            try {
+                MethodHandles.Lookup privateLookup = MethodHandles.privateLookupIn(entityClass, lookup);
+                getter = privateLookup.unreflectGetter(field);
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException(
+                        "Failed to create MethodHandle getter for field '" + field.getName() +
+                                "' in class '" + entityClass.getName() + "'", e);
+            }
 
             String effectiveFieldName = encrypted.fieldName().isEmpty()
                     ? field.getName()
@@ -63,7 +91,7 @@ public class EntityMetadataCache {
                     : encrypted.algorithm();
 
             result.add(new EncryptedFieldMetadata(
-                    field,
+                    getter,
                     field.getName(),
                     fieldType,
                     algo,

@@ -56,38 +56,39 @@ public class CryptoBeforeSaveListener {
         byte[] hmacKey = keyVaultService.getHmacKey(activeKid);
 
         for (EncryptedFieldMetadata meta : fields) {
+            Object value;
             try {
-                Object value = meta.field().get(source);
-                if (value == null) continue; // Skip null fields
-
-                // Serialize to byte[]
-                byte[] serialized = typeSerializer.serialize(value);
-
-                // Get algorithm from metadata
-                SymmetricAlgorithm algorithm = meta.algorithm();
-
-                // Encrypt with algorithm
-                byte[] encrypted = cryptoCodec.encrypt(dek, serialized, algorithm);
-
-                // Build BSON sub-document
-                Document subDoc = new Document();
-                subDoc.put("c", new org.bson.types.Binary(encrypted));
-                subDoc.put("_e", 1);
-                subDoc.put("_t", resolveTypeMarker(meta.javaType()));
-                subDoc.put("_k", activeKid);
-                subDoc.put("_a", algorithm.name());
-
-                // Blind index
-                if (meta.blindIndex()) {
-                    String blindIndex = cryptoCodec.generateBlindIndex(
-                            hmacKey, meta.effectiveFieldName(), serialized);
-                    subDoc.put("b", blindIndex);
-                }
-
-                document.put(meta.fieldName(), subDoc);
-            } catch (IllegalAccessException e) {
+                value = meta.getter().invoke(source);
+            } catch (Throwable e) {
                 throw new RuntimeException("Failed to access field: " + meta.fieldName(), e);
             }
+            if (value == null) continue; // Skip null fields
+
+            // Serialize to byte[]
+            byte[] serialized = typeSerializer.serialize(value);
+
+            // Get algorithm from metadata
+            SymmetricAlgorithm algorithm = meta.algorithm();
+
+            // Encrypt with algorithm
+            byte[] encrypted = cryptoCodec.encrypt(dek, serialized, algorithm);
+
+            // Build BSON sub-document
+            Document subDoc = new Document();
+            subDoc.put("c", new org.bson.types.Binary(encrypted));
+            subDoc.put("_e", 1);
+            subDoc.put("_t", resolveTypeMarker(meta.javaType()));
+            subDoc.put("_k", activeKid);
+            subDoc.put("_a", algorithm.name());
+
+            // Blind index
+            if (meta.blindIndex()) {
+                String blindIndex = cryptoCodec.generateBlindIndex(
+                        hmacKey, meta.effectiveFieldName(), serialized);
+                subDoc.put("b", blindIndex);
+            }
+
+            document.put(meta.fieldName(), subDoc);
         }
     }
 }
