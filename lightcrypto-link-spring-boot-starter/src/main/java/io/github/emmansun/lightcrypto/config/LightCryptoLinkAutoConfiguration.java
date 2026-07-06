@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
@@ -87,7 +88,7 @@ public class LightCryptoLinkAutoConfiguration {
     public FieldCryptoService fieldCryptoService(EntityMetadataCache metadataCache,
                                                  CryptoCodec cryptoCodec,
                                                  TypeDeserializer typeDeserializer,
-                                                 KeyVaultService keyVaultService) {
+                                                 @Lazy KeyVaultService keyVaultService) {
         return new FieldCryptoService(metadataCache, cryptoCodec, typeDeserializer, keyVaultService);
     }
 
