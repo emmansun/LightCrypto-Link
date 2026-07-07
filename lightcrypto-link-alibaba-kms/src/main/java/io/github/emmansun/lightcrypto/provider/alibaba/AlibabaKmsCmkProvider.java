@@ -31,7 +31,7 @@ import java.util.Objects;
  * {@link MGF1ParameterSpec#SHA256} is required.
  * </p>
  */
-public class AlibabaKmsCmkProvider implements CmkProvider {
+public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     private static final String PROVIDER_ID = "alibaba-kms";
 

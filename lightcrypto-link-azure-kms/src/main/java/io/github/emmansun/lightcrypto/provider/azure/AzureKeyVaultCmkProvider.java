@@ -18,7 +18,7 @@ import java.security.spec.MGF1ParameterSpec;
  * <p>
  * Local wrap uses RSA-OAEP with SHA-256 (public key), remote unwrap calls Azure Key Vault API.
  */
-public class AzureKeyVaultCmkProvider implements CmkProvider {
+public final class AzureKeyVaultCmkProvider implements CmkProvider {
 
     private final PublicKey publicKey;
     private final CryptographyClient cryptoClient;
