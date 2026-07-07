@@ -12,6 +12,7 @@ import io.github.emmansun.lightcrypto.testmodel.TestUser;
 import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 
@@ -116,5 +117,21 @@ class CryptoMongoQueryCreatorTest extends LclTestBase {
         assertThat(inDoc).isNotNull();
         List<String> hashed = (List<String>) inDoc.get("$in");
         assertThat(hashed).hasSize(2);
+    }
+
+    @Test
+    void rewritePreservesSortSkipAndLimit() {
+        Query q = new Query(Criteria.where("phone").is("13800138000"));
+        q.with(Sort.by(Sort.Direction.DESC, "createdAt"));
+        q.skip(5);
+        q.limit(10);
+
+        Query r = qc.rewrite(q, TestUser.class);
+
+        assertThat(r.getSortObject()).isEqualTo(new Document("createdAt", -1));
+        assertThat(r.getSkip()).isEqualTo(5);
+        assertThat(r.getLimit()).isEqualTo(10);
+        assertThat(r.getQueryObject().containsKey("phone.b")).isTrue();
+        assertThat(r.getQueryObject().containsKey("phone")).isFalse();
     }
 }

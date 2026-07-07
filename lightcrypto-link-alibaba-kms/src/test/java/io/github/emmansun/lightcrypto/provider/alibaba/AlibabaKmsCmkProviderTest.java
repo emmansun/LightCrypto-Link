@@ -73,6 +73,12 @@ class AlibabaKmsCmkProviderTest {
         assertThat(provider.getProviderId()).isEqualTo("alibaba-kms");
     }
 
+    @Test
+    void getPublicReference_shouldContainKeyIdAndVersion() throws Exception {
+        AlibabaKmsCmkProvider provider = createProvider();
+        assertThat(provider.getPublicReference()).isEqualTo("key-test:ver-test");
+    }
+
     // ===== PublicKeyLoader tests =====
 
     @Test

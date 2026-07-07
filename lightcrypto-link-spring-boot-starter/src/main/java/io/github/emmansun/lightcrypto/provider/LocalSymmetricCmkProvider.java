@@ -6,7 +6,9 @@ import io.github.emmansun.lightcrypto.model.WrappedKey;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.HexFormat;
 
 /**
  * Local symmetric CMK Provider — wraps/unwraps DEKs locally using AES-256-GCM.
@@ -24,6 +26,7 @@ public final class LocalSymmetricCmkProvider implements CmkProvider {
 
     private final byte[] cmk;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final String publicReference;
 
     public LocalSymmetricCmkProvider(byte[] cmk) {
         if (cmk == null || cmk.length != REQUIRED_CMK_LENGTH) {
@@ -32,11 +35,17 @@ public final class LocalSymmetricCmkProvider implements CmkProvider {
                             (cmk == null ? "null" : cmk.length));
         }
         this.cmk = cmk.clone();
+        this.publicReference = buildPublicReference(this.cmk);
     }
 
     @Override
     public String getProviderId() {
         return PROVIDER_ID;
+    }
+
+    @Override
+    public String getPublicReference() {
+        return publicReference;
     }
 
     @Override
@@ -80,6 +89,15 @@ public final class LocalSymmetricCmkProvider implements CmkProvider {
             return cipher.doFinal(ciphertext);
         } catch (Exception e) {
             throw new CryptoException("Failed to unwrap key", e);
+        }
+    }
+
+    private static String buildPublicReference(byte[] cmk) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(cmk);
+            return "local-cmk-sha256:" + HexFormat.of().formatHex(digest, 0, 8);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to build local CMK public reference", e);
         }
     }
 }

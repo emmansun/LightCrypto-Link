@@ -249,10 +249,11 @@ public class CryptoBeforeSaveListener {
             default -> throw new IllegalArgumentException("Unsupported structured type marker: " + typeMarker);
         };
 
-        BasicOutputBuffer buffer = new BasicOutputBuffer();
-        BsonBinaryWriter writer = new BsonBinaryWriter(buffer);
-        DOCUMENT_CODEC.encode(writer, payload, EncoderContext.builder().build());
-        writer.flush();
-        return buffer.toByteArray();
+        try (BasicOutputBuffer buffer = new BasicOutputBuffer();
+             BsonBinaryWriter writer = new BsonBinaryWriter(buffer)) {
+            DOCUMENT_CODEC.encode(writer, payload, EncoderContext.builder().build());
+            writer.flush();
+            return buffer.toByteArray();
+        }
     }
 }

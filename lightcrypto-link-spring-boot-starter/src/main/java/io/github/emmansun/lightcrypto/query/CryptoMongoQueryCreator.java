@@ -6,7 +6,8 @@ import io.github.emmansun.lightcrypto.service.CryptoCodec;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeSerializer;
 import org.bson.Document;
-import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.query.BasicQuery;
 import org.springframework.data.mongodb.core.query.Query;
 
 import java.util.ArrayList;
@@ -40,15 +41,53 @@ public class CryptoMongoQueryCreator {
         if (!metadataCache.hasEncryptedFields(entityClass)) return query;
 
         List<EncryptedFieldMetadata> fields = metadataCache.getEncryptedFields(entityClass);
-        Document criteriaDoc = query.getQueryObject();
+        Document criteriaDoc = copyDocument(query.getQueryObject());
 
         rewriteCriteriaDocument(criteriaDoc, fields, entityClass);
 
-        Query rewritten = new Query();
-        for (Map.Entry<String, Object> entry : criteriaDoc.entrySet()) {
-            rewritten.addCriteria(new Criteria(entry.getKey()).is(entry.getValue()));
+        // Rebuild query using rewritten criteria while preserving common options.
+        Query rewritten = new BasicQuery(criteriaDoc, query.getFieldsObject());
+        Sort sort = toSort(query.getSortObject());
+        if (sort.isSorted()) {
+            rewritten.with(sort);
         }
+        rewritten.skip(query.getSkip());
+        rewritten.limit(query.getLimit());
+        query.getCollation().ifPresent(rewritten::collation);
         return rewritten;
+    }
+
+    private Sort toSort(Document sortDoc) {
+        List<Sort.Order> orders = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : sortDoc.entrySet()) {
+            String key = entry.getKey();
+            Object raw = entry.getValue();
+            int direction = raw instanceof Number n ? n.intValue() : 1;
+            orders.add(direction < 0 ? Sort.Order.desc(key) : Sort.Order.asc(key));
+        }
+        return orders.isEmpty() ? Sort.unsorted() : Sort.by(orders);
+    }
+
+    private Document copyDocument(Document source) {
+        Document copy = new Document();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            copy.put(entry.getKey(), copyValue(entry.getValue()));
+        }
+        return copy;
+    }
+
+    private Object copyValue(Object value) {
+        if (value instanceof Document doc) {
+            return copyDocument(doc);
+        }
+        if (value instanceof List<?> list) {
+            List<Object> copied = new ArrayList<>(list.size());
+            for (Object item : list) {
+                copied.add(copyValue(item));
+            }
+            return copied;
+        }
+        return value;
     }
 
     private void rewriteCriteriaDocument(Document doc, List<EncryptedFieldMetadata> fields, Class<?> entityClass) {

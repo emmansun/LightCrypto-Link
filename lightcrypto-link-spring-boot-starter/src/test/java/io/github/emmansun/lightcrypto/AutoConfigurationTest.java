@@ -72,6 +72,11 @@ class AutoConfigurationTest {
                 }
 
                 @Override
+                public String getPublicReference() {
+                    return "custom-test-provider:ref";
+                }
+
+                @Override
                 public WrappedKey wrap(byte[] keyMaterial) {
                     return new WrappedKey(keyMaterial, "custom-wrap");
                 }

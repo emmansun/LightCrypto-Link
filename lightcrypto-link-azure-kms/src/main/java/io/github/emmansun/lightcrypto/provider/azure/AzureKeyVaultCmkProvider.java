@@ -84,6 +84,11 @@ public class AzureKeyVaultCmkProvider implements CmkProvider {
         return "azure-keyvault";
     }
 
+    @Override
+    public String getPublicReference() {
+        return "azure-keyvault:" + (keyVersion == null ? "unknown-version" : keyVersion);
+    }
+
     /** Returns the auto-resolved key version. */
     public String getKeyVersion() {
         return keyVersion;

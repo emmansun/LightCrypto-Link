@@ -66,6 +66,12 @@ class AzureKeyVaultCmkProviderTest {
     }
 
     @Test
+    void getPublicReference_shouldContainProviderAndVersion() {
+        AzureKeyVaultCmkProvider provider = createProvider();
+        assertThat(provider.getPublicReference()).isEqualTo("azure-keyvault:test-version");
+    }
+
+    @Test
     void getKeyVersion_shouldReturnAutoResolvedVersion() {
         AzureKeyVaultCmkProvider provider = createProvider();
         assertThat(provider.getKeyVersion()).isEqualTo("test-version");

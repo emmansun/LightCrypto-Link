@@ -91,6 +91,14 @@ public class AlibabaKmsCmkProvider implements CmkProvider {
     }
 
     @Override
+    public String getPublicReference() {
+        if (keyVersionId == null || keyVersionId.isBlank()) {
+            return keyId;
+        }
+        return keyId + ":" + keyVersionId;
+    }
+
+    @Override
     public WrappedKey wrap(byte[] plaintextKey) {
         if (isRsa) {
             return rsaWrap(plaintextKey);

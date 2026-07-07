@@ -17,6 +17,15 @@ public interface CmkProvider {
     String getProviderId();
 
     /**
+     * Get a non-secret public reference for the CMK used by this provider.
+     * <p>
+     * This value is safe to persist in metadata/audit records and MUST NOT
+     * expose raw key material.
+     * </p>
+     */
+    String getPublicReference();
+
+    /**
      * Wrap (encrypt) raw key material using the CMK.
      *
      * @param plaintextKey raw key bytes

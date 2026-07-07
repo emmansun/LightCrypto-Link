@@ -100,44 +100,50 @@ public class KeyVaultService {
     }
 
     /**
-     * Rotate the key for the given entity class: marks the current active key
-     * as ROTATED, generates a new key entry with incremented version,
+     * Rotate the DEK (Data Encryption Key) for the given entity class: marks the current
+     * active key as ROTATED, generates a new DEK + HMAC key pair with incremented version,
      * updates activeKid, and persists to MongoDB.
+     * <p>
+     * Note: This only rotates the DEK, NOT the CMK. The new DEK is still wrapped
+     * by the same CMK.
+     * </p>
      */
-    public void rotateKey(Class<?> entityClass) {
+    public void rotateDek(Class<?> entityClass) {
         String className = entityClass.getSimpleName();
-        String vaultId = VAULT_ID_PREFIX + className;
+        synchronized (this) {
+            String vaultId = VAULT_ID_PREFIX + className;
 
-        KeyVaultDocument doc = loadVaultDocument(vaultId);
-        if (doc == null) {
-            throw new FatalCryptoException("Vault not found for entity: " + className);
-        }
-
-        // Find current active entry and determine next version number
-        int maxVersion = 0;
-        for (KeyVersionEntry entry : doc.getKeys()) {
-            if ("ACTIVE".equals(entry.getStatus())) {
-                entry.setStatus("ROTATED");
+            KeyVaultDocument doc = loadVaultDocument(vaultId);
+            if (doc == null) {
+                throw new FatalCryptoException("Vault not found for entity: " + className);
             }
-            int ver = parseVersion(entry.getKid());
-            if (ver > maxVersion) maxVersion = ver;
+
+            // Find current active entry and determine next version number
+            int maxVersion = 0;
+            for (KeyVersionEntry entry : doc.getKeys()) {
+                if ("ACTIVE".equals(entry.getStatus())) {
+                    entry.setStatus("ROTATED");
+                }
+                int ver = parseVersion(entry.getKid());
+                if (ver > maxVersion) maxVersion = ver;
+            }
+
+            // Generate new key entry
+            String newKid = generateKid(maxVersion + 1);
+            KeyVersionEntry newEntry = createKeyEntry(newKid);
+
+            doc.getKeys().add(newEntry);
+            doc.setActiveKid(newKid);
+            doc.setUpdatedAt(Instant.now());
+
+            // Persist
+            mongoTemplate.save(doc);
+
+            // Reload into cache
+            verifyAndLoadKeys(doc, className);
+
+            log.info("DEK rotated for entity {}: new active kid = {}", className, newKid);
         }
-
-        // Generate new key entry
-        String newKid = generateKid(maxVersion + 1);
-        KeyVersionEntry newEntry = createKeyEntry(newKid);
-
-        doc.getKeys().add(newEntry);
-        doc.setActiveKid(newKid);
-        doc.setUpdatedAt(Instant.now());
-
-        // Persist
-        mongoTemplate.save(doc);
-
-        // Reload into cache
-        verifyAndLoadKeys(doc, className);
-
-        log.info("Key rotated for entity {}: new active kid = {}", className, newKid);
     }
 
     // ===== Internal methods =====
@@ -173,7 +179,7 @@ public class KeyVaultService {
 
         CmkInfo cmkInfo = new CmkInfo();
         cmkInfo.setProvider(cmkProvider.getProviderId());
-        cmkInfo.setId(properties.getCmk());
+        cmkInfo.setId(cmkProvider.getPublicReference());
         doc.setCmk(cmkInfo);
 
         Instant now = Instant.now();
@@ -226,8 +232,13 @@ public class KeyVaultService {
 
     private void verifyAndLoadKeys(KeyVaultDocument doc, String entityClassName) {
         try {
+            if (doc.getKeys() == null || doc.getKeys().isEmpty()) {
+                throw new FatalCryptoException("Vault has no key entries: " + doc.getId());
+            }
+
             Map<String, ResolvedKeyPair> resolvedKeys = new HashMap<>();
             String activeKid = null;
+            int activeCount = 0;
 
             for (KeyVersionEntry entry : doc.getKeys()) {
                 byte[] unwrappedDek = cmkProvider.unwrap(
@@ -258,7 +269,15 @@ public class KeyVaultService {
 
                 if ("ACTIVE".equals(entry.getStatus())) {
                     activeKid = entry.getKid();
+                    activeCount++;
                 }
+            }
+
+            if (activeCount == 0) {
+                throw new FatalCryptoException("Vault has no ACTIVE key entry: " + doc.getId());
+            }
+            if (activeCount > 1) {
+                throw new FatalCryptoException("Vault has multiple ACTIVE key entries: " + doc.getId());
             }
 
             EntityKeyContext ctx = new EntityKeyContext(activeKid, resolvedKeys);
