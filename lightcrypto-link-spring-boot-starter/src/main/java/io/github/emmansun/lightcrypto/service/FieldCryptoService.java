@@ -1,7 +1,9 @@
 package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
+import io.github.emmansun.lightcrypto.exception.DecryptionException;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.exception.KeyManagementException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.model.PathSegmentType;
@@ -176,20 +178,52 @@ public class FieldCryptoService {
 
         // Read algorithm from sub-document, default to AES_256_GCM for backward compatibility
         String algorithmName = subDoc.getString("_a");
-        SymmetricAlgorithm algorithm = algorithmName != null
+        SymmetricAlgorithm algorithm;
+        try {
+            algorithm = algorithmName != null
                 ? SymmetricAlgorithm.valueOf(algorithmName)
                 : SymmetricAlgorithm.AES_256_GCM;
+        } catch (IllegalArgumentException ex) {
+            throw new DecryptionException(
+                "Unsupported algorithm '" + algorithmName + "' for field '" + meta.bsonFieldName()
+                    + "' (kid=" + maskKid(kid) + ")",
+                ex);
+        }
 
         // Decrypt using kid-specific DEK and algorithm
-        byte[] dek = keyVaultService.getDek(kid);
-        byte[] plaintext = cryptoCodec.decrypt(dek, cipherBinary.getData(), algorithm);
+        byte[] dek;
+        try {
+            dek = keyVaultService.getDek(kid);
+        } catch (FatalCryptoException ex) {
+            throw new KeyManagementException(
+                "Failed to resolve DEK for field '" + meta.bsonFieldName() + "' (kid=" + maskKid(kid) + ")",
+                ex);
+        }
+
+        byte[] plaintext;
+        try {
+            plaintext = cryptoCodec.decrypt(dek, cipherBinary.getData(), algorithm);
+        } catch (RuntimeException ex) {
+            throw new DecryptionException(
+                "Failed to decrypt field '" + meta.bsonFieldName() + "' with algorithm " + algorithm
+                    + " (kid=" + maskKid(kid) + ")",
+                ex);
+        }
 
         if ("DOC".equals(typeMarker) || "COL".equals(typeMarker) || "MAP".equals(typeMarker)) {
             return decodeStructuredValue(typeMarker, plaintext);
         }
 
         // Deserialize
-        Object value = typeDeserializer.deserialize(typeMarker, plaintext);
+        Object value;
+        try {
+            value = typeDeserializer.deserialize(typeMarker, plaintext);
+        } catch (RuntimeException ex) {
+            throw new DecryptionException(
+                "Failed to deserialize field '" + meta.bsonFieldName() + "' with type marker '" + typeMarker
+                    + "' (kid=" + maskKid(kid) + ")",
+                ex);
+        }
 
         log.debug("Decrypted field '{}' using kid {} and algorithm {}",
             meta.bsonFieldName(), kid, algorithm);
@@ -197,12 +231,27 @@ public class FieldCryptoService {
     }
 
     private Object decodeStructuredValue(String typeMarker, byte[] plaintext) {
-        Document payload = new RawBsonDocument(plaintext).decode(DOCUMENT_CODEC);
+        Document payload;
+        try {
+            payload = new RawBsonDocument(plaintext).decode(DOCUMENT_CODEC);
+        } catch (RuntimeException ex) {
+            throw new DecryptionException("Failed to decode structured payload for type marker: " + typeMarker, ex);
+        }
 
         return switch (typeMarker) {
             case "DOC", "MAP" -> payload;
             case "COL" -> payload.getList("_v", Object.class);
-            default -> throw new IllegalArgumentException("Unsupported structured type marker: " + typeMarker);
+            default -> throw new DecryptionException("Unsupported structured type marker: " + typeMarker);
         };
+    }
+
+    private String maskKid(String kid) {
+        if (kid == null || kid.isEmpty()) {
+            return "N/A";
+        }
+        if (kid.length() <= 4) {
+            return "****";
+        }
+        return kid.substring(0, 4) + "****";
     }
 }

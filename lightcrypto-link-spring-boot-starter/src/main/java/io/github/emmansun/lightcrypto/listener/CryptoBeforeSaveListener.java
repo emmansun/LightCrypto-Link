@@ -1,6 +1,7 @@
 package io.github.emmansun.lightcrypto.listener;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
+import io.github.emmansun.lightcrypto.exception.EncryptionException;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.model.PathSegmentType;
 import io.github.emmansun.lightcrypto.service.CryptoCodec;
@@ -196,7 +197,7 @@ public class CryptoBeforeSaveListener {
                 }
             }
         } catch (Throwable e) {
-            throw new RuntimeException("Failed to encrypt field path: " + meta.bsonFieldName(), e);
+            throw new EncryptionException("Failed to encrypt field path: " + meta.bsonFieldName(), e);
         }
     }
 
