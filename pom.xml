@@ -58,7 +58,7 @@
         <aliyun.kms.version>2.0.0</aliyun.kms.version>
 
         <!-- Plugin versions -->
-        <checkstyle.version>10.17.0</checkstyle.version>
+        <checkstyle.version>13.7.0</checkstyle.version>
         <spotbugs.version>4.10.2.0</spotbugs.version>
         <jacoco.version>0.8.15</jacoco.version>
     </properties>
