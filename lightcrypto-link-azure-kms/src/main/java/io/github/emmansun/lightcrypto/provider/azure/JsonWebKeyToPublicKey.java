@@ -6,7 +6,6 @@ import java.math.BigInteger;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.RSAPublicKeySpec;
-import java.util.Base64;
 
 /**
  * Utility to convert Azure Key Vault {@link JsonWebKey} to a Java {@link PublicKey}.
