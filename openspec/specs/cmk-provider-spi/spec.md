@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the cmk-provider-spi capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: CmkProvider interface
 The system SHALL define a `CmkProvider` interface in `com.lcl.crypto.provider` with the following methods:
 - `String getProviderId()`: returns the provider identifier (e.g., "local", "azure", "aliyun")
@@ -37,3 +40,5 @@ The system SHALL auto-configure `LocalSymmetricCmkProvider` as the default `CmkP
 #### Scenario: Custom provider override
 - **WHEN** the application defines a custom `CmkProvider` bean
 - **THEN** the custom bean SHALL take precedence and `LocalSymmetricCmkProvider` SHALL not be created
+
+

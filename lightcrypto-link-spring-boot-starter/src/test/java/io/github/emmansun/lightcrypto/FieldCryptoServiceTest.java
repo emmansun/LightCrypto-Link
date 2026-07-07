@@ -9,16 +9,27 @@ import io.github.emmansun.lightcrypto.service.FieldCryptoService;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeDeserializer;
 import io.github.emmansun.lightcrypto.testmodel.MultiAlgoEntity;
+import io.github.emmansun.lightcrypto.testmodel.TestArticle;
 import io.github.emmansun.lightcrypto.testmodel.TestEmployee;
 import io.github.emmansun.lightcrypto.testmodel.TestPlainEntity;
 import io.github.emmansun.lightcrypto.testmodel.TestUser;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithAddresses;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithWholeAddress;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithWholeAddresses;
+import io.github.emmansun.lightcrypto.testmodel.TestWholeSimpleCollections;
+import org.bson.BsonBinaryWriter;
 import org.bson.Document;
+import org.bson.codecs.DocumentCodec;
+import org.bson.codecs.EncoderContext;
+import org.bson.io.BasicOutputBuffer;
 import org.bson.types.Binary;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -275,6 +286,105 @@ class FieldCryptoServiceTest extends LclTestBase {
         assertThat(result.get("phone")).isEqualTo("hello");
     }
 
+    @Test
+    void decryptCollectionListAndMapValues() {
+        byte[] encJava = codec.encrypt(TEST_DEK, "java".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        byte[] encSpring = codec.encrypt(TEST_DEK, "spring".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        byte[] encDark = codec.encrypt(TEST_DEK, "dark".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+
+        Document doc = new Document();
+        doc.put("tags", new ArrayList<>(List.of(
+                buildSubDoc(encJava, "STR", TEST_KID, "AES_256_GCM"),
+                buildSubDoc(encSpring, "STR", TEST_KID, "AES_256_GCM")
+        )));
+        doc.put("settings", new Document("theme", buildSubDoc(encDark, "STR", TEST_KID, "AES_256_GCM")));
+
+        fieldCryptoService.decryptDocument(doc, TestArticle.class);
+
+        assertThat((List<Object>) doc.get("tags")).containsExactly("java", "spring");
+        assertThat(((Document) doc.get("settings")).get("theme")).isEqualTo("dark");
+    }
+
+    @Test
+    void decryptNestedPojoInsideList() {
+        byte[] encStreet = codec.encrypt(TEST_DEK, "xx-road".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+
+        Document address = new Document();
+        address.put("street", buildSubDoc(encStreet, "STR", TEST_KID, "AES_256_GCM"));
+        address.put("city", "shanghai");
+
+        Document doc = new Document("addresses", new ArrayList<>(List.of(address)));
+        fieldCryptoService.decryptDocument(doc, TestUserWithAddresses.class);
+
+        Document first = (Document) ((List<?>) doc.get("addresses")).get(0);
+        assertThat(first.get("street")).isEqualTo("xx-road");
+        assertThat(first.get("city")).isEqualTo("shanghai");
+    }
+
+    @Test
+    void decryptWholeNestedObjectPayload() {
+        Document addressDoc = new Document();
+        addressDoc.put("street", "xx-road");
+        addressDoc.put("city", "shanghai");
+        byte[] payload = encodePayload(addressDoc);
+        byte[] enc = codec.encrypt(TEST_DEK, payload, SymmetricAlgorithm.AES_256_GCM);
+
+        Document doc = new Document();
+        doc.put("address", buildSubDoc(enc, "DOC", TEST_KID, "AES_256_GCM"));
+
+        fieldCryptoService.decryptDocument(doc, TestUserWithWholeAddress.class);
+
+        assertThat(doc.get("address")).isInstanceOf(Document.class);
+        Document address = (Document) doc.get("address");
+        assertThat(address.get("street")).isEqualTo("xx-road");
+        assertThat(address.get("city")).isEqualTo("shanghai");
+    }
+
+    @Test
+    void decryptWholeCollectionPayload() {
+        Document element = new Document();
+        element.put("street", "xx-road");
+        element.put("city", "shanghai");
+        Document payloadDoc = new Document("_v", new ArrayList<>(List.of(element)));
+        byte[] payload = encodePayload(payloadDoc);
+        byte[] enc = codec.encrypt(TEST_DEK, payload, SymmetricAlgorithm.AES_256_GCM);
+
+        Document doc = new Document();
+        doc.put("addresses", buildSubDoc(enc, "COL", TEST_KID, "AES_256_GCM"));
+
+        fieldCryptoService.decryptDocument(doc, TestUserWithWholeAddresses.class);
+
+        assertThat(doc.get("addresses")).isInstanceOf(List.class);
+        List<?> addresses = (List<?>) doc.get("addresses");
+        assertThat(addresses).hasSize(1);
+        assertThat(addresses.get(0)).isInstanceOf(Document.class);
+        Document first = (Document) addresses.get(0);
+        assertThat(first.get("street")).isEqualTo("xx-road");
+        assertThat(first.get("city")).isEqualTo("shanghai");
+    }
+
+    @Test
+    void decryptWholeSimpleCollectionAndMapPayload() {
+        Document listPayload = new Document("_v", new ArrayList<>(List.of("java", "spring")));
+        byte[] listEncoded = encodePayload(listPayload);
+        byte[] listEncrypted = codec.encrypt(TEST_DEK, listEncoded, SymmetricAlgorithm.AES_256_GCM);
+
+        Document mapPayload = new Document("theme", "dark");
+        byte[] mapEncoded = encodePayload(mapPayload);
+        byte[] mapEncrypted = codec.encrypt(TEST_DEK, mapEncoded, SymmetricAlgorithm.AES_256_GCM);
+
+        Document doc = new Document();
+        doc.put("tags", buildSubDoc(listEncrypted, "COL", TEST_KID, "AES_256_GCM"));
+        doc.put("settings", buildSubDoc(mapEncrypted, "MAP", TEST_KID, "AES_256_GCM"));
+
+        fieldCryptoService.decryptDocument(doc, TestWholeSimpleCollections.class);
+
+        assertThat(doc.get("tags")).isInstanceOf(List.class);
+        assertThat((List<Object>) doc.get("tags")).containsExactly("java", "spring");
+        assertThat(doc.get("settings")).isInstanceOf(Document.class);
+        assertThat(((Document) doc.get("settings")).getString("theme")).isEqualTo("dark");
+    }
+
     // --- 4.13 is run separately ---
 
     // Helper: build an encrypted sub-document
@@ -286,5 +396,13 @@ class FieldCryptoServiceTest extends LclTestBase {
         sub.put("_k", kid);
         sub.put("_a", algorithm);
         return sub;
+    }
+
+    private byte[] encodePayload(Document payload) {
+        BasicOutputBuffer buffer = new BasicOutputBuffer();
+        BsonBinaryWriter writer = new BsonBinaryWriter(buffer);
+        new DocumentCodec().encode(writer, payload, EncoderContext.builder().build());
+        writer.flush();
+        return buffer.toByteArray();
     }
 }

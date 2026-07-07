@@ -87,7 +87,7 @@ public class CryptoMongoQueryCreator {
                 List<String> hashed = inValues.stream()
                         .map(v -> hashValue(matched, v, entityClass))
                         .toList();
-                doc.put(matched.fieldName() + ".b", new Document("$in", hashed));
+                doc.put(matched.bsonFieldName() + ".b", new Document("$in", hashed));
                 doc.remove(key);
                 continue;
             }
@@ -112,7 +112,7 @@ public class CryptoMongoQueryCreator {
 
             // Simple 'is' query
             String hashed = hashValue(matched, value, entityClass);
-            doc.put(matched.fieldName() + ".b", hashed);
+            doc.put(matched.bsonFieldName() + ".b", hashed);
             doc.remove(key);
         }
     }
@@ -122,12 +122,12 @@ public class CryptoMongoQueryCreator {
         keyVaultService.ensureVaultInitialized(entityClass);
         String activeKid = keyVaultService.getActiveKid(entityClass);
         byte[] hmacKey = keyVaultService.getHmacKey(activeKid);
-        return cryptoCodec.generateBlindIndex(hmacKey, meta.effectiveFieldName(), serialized);
+        return cryptoCodec.generateBlindIndex(hmacKey, meta.blindIndexFieldName(), serialized);
     }
 
     private EncryptedFieldMetadata findEncryptedField(String key, List<EncryptedFieldMetadata> fields) {
         return fields.stream()
-                .filter(f -> f.fieldName().equals(key))
+            .filter(f -> f.bsonFieldName().equals(key))
                 .findFirst()
                 .orElse(null);
     }

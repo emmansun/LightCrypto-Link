@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the azure-keyvault-cmk capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: AzureKeyVaultCmkProvider implements CmkProvider
 The system SHALL provide `AzureKeyVaultCmkProvider` implementing the `CmkProvider` SPI with:
 - `getProviderId()` returning `"azure-keyvault"`
@@ -30,7 +33,7 @@ The system SHALL load the RSA public key and key version using one of two strate
 1. **From configuration**: if `lcl.crypto.azure.public-key` is set, parse the PEM string into a `java.security.PublicKey`
 2. **From Azure Key Vault**: if `public-key` is not configured, call `CryptographyClient.getKey()` to retrieve the `KeyVaultKey`, extract the `JsonWebKey` public key parameters (`n`, `e`) and key version from `getProperties().getVersion()`
 
-The key version SHALL always be auto-resolved via `CryptographyClient.getKey()` at startup — it is NOT a user-configurable property.
+The key version SHALL always be auto-resolved via `CryptographyClient.getKey()` at startup - it is NOT a user-configurable property.
 
 #### Scenario: Public key from configuration
 - **WHEN** `lcl.crypto.azure.public-key` is set to a valid PEM public key
@@ -97,4 +100,6 @@ Integration tests requiring real Azure credentials SHALL be annotated with `@Ena
 
 #### Scenario: Tests run locally
 - **WHEN** environment variables `AZURE_VAULT_URI`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_KEY_NAME` are set
-- **THEN** the integration test SHALL execute a full wrap→unwrap roundtrip against real Azure Key Vault
+- **THEN** the integration test SHALL execute a full wrap->unwrap roundtrip against real Azure Key Vault
+
+

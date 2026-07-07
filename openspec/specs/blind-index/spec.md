@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the blind-index capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: HMAC-SHA-256 blind index generation
 The system SHALL generate a blind index by computing `HMAC-SHA-256(hmacKey, effectiveFieldName + ":" + serializedValue)` and returning the result as a lowercase hex string.
 
@@ -32,3 +35,5 @@ The system SHALL serialize the value using `TypeSerializer` before computing the
 #### Scenario: Integer blind index consistency
 - **WHEN** an Integer field with value 28 is blind-indexed
 - **THEN** the HMAC input SHALL be `"fieldName:28"` (serialized via `String.valueOf`)
+
+

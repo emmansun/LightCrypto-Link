@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the multi-dek-vault capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: Per-entity-class vault document
 The system SHALL create and manage a separate vault document in `__lcl_keyvault` for each entity class that contains `@Encrypted` fields. The vault document `_id` SHALL be `lcl-dek-{entitySimpleName}`.
 
@@ -77,3 +80,5 @@ Every encrypted BSON sub-document SHALL include a `_k` field containing the `kid
 #### Scenario: Unknown kid during decryption
 - **WHEN** a sub-document references a `kid` not present in the vault
 - **THEN** the system SHALL throw `FatalCryptoException` with a message indicating the missing kid
+
+

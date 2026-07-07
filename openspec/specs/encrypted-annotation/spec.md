@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define the contract for `@Encrypted` annotation semantics and entity metadata scanning behavior used by transparent encryption, including collection/map field discovery and path metadata generation.
+
+## Requirements
 
 ### Requirement: @Encrypted annotation definition
 The system SHALL provide an `@Encrypted` field-level annotation in `com.lcl.crypto.annotation` with the following attributes:
@@ -33,7 +37,10 @@ The annotation SHALL have `@Target(ElementType.FIELD)`, `@Retention(RetentionPol
 - **THEN** the encrypted sub-document SHALL include an `_a` field containing the algorithm enum name (e.g., `"AES_256_GCM"`, `"SM4_GCM"`)
 
 ### Requirement: Entity metadata scanning
-The system SHALL scan entity classes at startup (or lazily on first access) to discover all fields annotated with `@Encrypted` and cache the metadata in `EntityMetadataCache`.
+The system SHALL scan entity classes at startup (or lazily on first access) to discover all `@Encrypted` fields and cache the metadata in `EntityMetadataCache`. The scan SHALL:
+- Traverse the entity's direct fields and recursively enter nested POJO fields
+- Identify Collection/Map typed fields, resolve their generic element/value types, and either register them as encrypted collection fields (if `@Encrypted` is present and element type is scalar) or recursively scan the element type (if no `@Encrypted` and element type is POJO)
+- Each discovered field's metadata SHALL include its full path, path segment types, and element type information
 
 #### Scenario: Entity with encrypted fields
 - **WHEN** an entity class has 2 fields annotated with `@Encrypted`
@@ -42,35 +49,11 @@ The system SHALL scan entity classes at startup (or lazily on first access) to d
 #### Scenario: Entity without encrypted fields
 - **WHEN** an entity class has no `@Encrypted` fields
 - **THEN** `EntityMetadataCache` SHALL return an empty metadata list and skip the entity during listener processing
-## ADDED Requirements
 
-### Requirement: @Encrypted annotation definition
-The system SHALL provide an `@Encrypted` field-level annotation in `com.lcl.crypto.annotation` with the following attributes:
-- `algorithm`: symmetric algorithm enum, default `AES_256_GCM`
-- `blindIndex`: boolean, default `false`
-- `fieldName`: string for HMAC salt override, default `""` (uses Java field name)
+#### Scenario: Entity with encrypted collection field
+- **WHEN** an entity has `@Encrypted List<String> tags`
+- **THEN** `EntityMetadataCache` SHALL return metadata with `path = ["tags"]`, `pathTypes = [LIST_ITER]`, and `javaType = String.class`
 
-The annotation SHALL have `@Target(ElementType.FIELD)`, `@Retention(RetentionPolicy.RUNTIME)`, and `@Documented`.
-
-#### Scenario: Default annotation usage
-- **WHEN** a field is annotated with `@Encrypted` without any attributes
-- **THEN** the system SHALL use AES-256-GCM encryption, disable blind index, and use the Java field name as the HMAC salt
-
-#### Scenario: Explicit blind index opt-in
-- **WHEN** a field is annotated with `@Encrypted(blindIndex = true)`
-- **THEN** the system SHALL generate a blind index hash for the field value and store it in the `b` sub-field of the BSON document
-
-#### Scenario: Custom fieldName salt
-- **WHEN** a field is annotated with `@Encrypted(fieldName = "national_id")`
-- **THEN** the system SHALL use `"national_id"` instead of the Java field name when computing the HMAC blind index
-
-### Requirement: Entity metadata scanning
-The system SHALL scan entity classes at startup (or lazily on first access) to discover all fields annotated with `@Encrypted` and cache the metadata in `EntityMetadataCache`.
-
-#### Scenario: Entity with encrypted fields
-- **WHEN** an entity class has 2 fields annotated with `@Encrypted`
-- **THEN** `EntityMetadataCache` SHALL return metadata entries for exactly those 2 fields, including field name, Java type, algorithm, blindIndex flag, and effective fieldName
-
-#### Scenario: Entity without encrypted fields
-- **WHEN** an entity class has no `@Encrypted` fields
-- **THEN** `EntityMetadataCache` SHALL return an empty metadata list and skip the entity during listener processing
+#### Scenario: Entity with POJO collection containing encrypted fields
+- **WHEN** an entity has `List<Address> addresses` and `Address` has `@Encrypted String street`
+- **THEN** `EntityMetadataCache` SHALL return metadata with `path = ["addresses", "street"]`, `pathTypes = [LIST_ITER, FIELD]`

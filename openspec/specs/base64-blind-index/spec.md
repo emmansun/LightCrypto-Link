@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the base64-blind-index capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: TypeSerializer returns raw bytes for byte[] input
 `TypeSerializer.serialize(Object value)` SHALL return the raw `byte[]` directly when the input type is `byte[]`, without hex or base64 encoding. For all other supported types, the output SHALL be the UTF-8 encoding of the deterministic string representation.
 
@@ -68,4 +71,6 @@ The HMAC input SHALL use a colon byte (`0x3A`) as separator between `fieldName` 
 
 #### Scenario: Different field-value pairs produce different HMAC
 - **WHEN** computing HMAC for `(fieldName="ab", value="cd")` and `(fieldName="a", value="bcd")`
-- **THEN** the inputs SHALL be `ab:cd` (5 bytes) vs `a:bcd` (5 bytes) — different byte sequences — producing different HMAC outputs
+- **THEN** the inputs SHALL be `ab:cd` (5 bytes) vs `a:bcd` (5 bytes) - different byte sequences - producing different HMAC outputs
+
+

@@ -8,6 +8,8 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Demonstrates LightCrypto-Link transparent encryption, decryption, blind index queries,
@@ -17,13 +19,16 @@ import java.time.LocalDate;
 public class DemoRunner implements CommandLineRunner {
 
     private final UserRepository userRepository;
+    private final AdvancedUserRepository advancedUserRepository;
     private final MongoTemplate mongoTemplate;
     private final FieldCryptoService fieldCryptoService;
 
     public DemoRunner(UserRepository userRepository,
+                      AdvancedUserRepository advancedUserRepository,
                       MongoTemplate mongoTemplate,
                       FieldCryptoService fieldCryptoService) {
         this.userRepository = userRepository;
+        this.advancedUserRepository = advancedUserRepository;
         this.mongoTemplate = mongoTemplate;
         this.fieldCryptoService = fieldCryptoService;
     }
@@ -32,6 +37,7 @@ public class DemoRunner implements CommandLineRunner {
     public void run(String... args) {
         // Clean up previous runs
         mongoTemplate.dropCollection(User.class);
+        mongoTemplate.dropCollection(AdvancedUser.class);
 
         System.out.println("=== LightCrypto-Link Basic CRUD Demo ===\n");
 
@@ -79,6 +85,60 @@ public class DemoRunner implements CommandLineRunner {
             System.out.println("  age       = " + rawDoc.get("age") + "  (decrypted manually)");
             System.out.println("  birthDate = " + rawDoc.get("birthDate") + "  (decrypted manually)");
             System.out.println("  Useful for: aggregation pipelines, MongoCollection queries, data migration, debugging.\n");
+        }
+
+        // 6. Nested object + collection encryption examples
+        AdvancedUser advancedUser = new AdvancedUser();
+        advancedUser.setName("NestedAndCollection");
+
+        AdvancedUser.Address nestedAddress = new AdvancedUser.Address();
+        nestedAddress.setStreet("No.1 Encrypted Rd");
+        nestedAddress.setCity("Shanghai");
+        advancedUser.setHomeAddress(nestedAddress);
+
+        advancedUser.setTags(List.of("java", "security"));
+        advancedUser.setSettings(Map.of("theme", "dark"));
+        advancedUser.setSecureTags(List.of("internal", "restricted"));
+        advancedUser.setSecureSettings(Map.of("token", "abc-xyz"));
+
+        AdvancedUser.WholeAddress wholeAddress = new AdvancedUser.WholeAddress();
+        wholeAddress.setStreet("No.8 WholeObject Ave");
+        wholeAddress.setCity("Beijing");
+        advancedUser.setSecureAddresses(List.of(wholeAddress));
+
+        advancedUserRepository.save(advancedUser);
+
+        AdvancedUser loadedAdvanced = advancedUserRepository.findById(advancedUser.getId()).orElseThrow();
+        System.out.println("[NESTED] homeAddress.street = " + loadedAdvanced.getHomeAddress().getStreet());
+        System.out.println("[COLLECTION] tags = " + loadedAdvanced.getTags());
+        System.out.println("[COLLECTION] settings.theme = " + loadedAdvanced.getSettings().get("theme"));
+        System.out.println("[WHOLE SIMPLE COL] secureTags = " + loadedAdvanced.getSecureTags());
+        System.out.println("[WHOLE SIMPLE MAP] secureSettings.token = " + loadedAdvanced.getSecureSettings().get("token"));
+        System.out.println("[WHOLE COL] secureAddresses[0].street = "
+            + loadedAdvanced.getSecureAddresses().get(0).getStreet() + "\n");
+
+        AdvancedUser foundByTag = advancedUserRepository.findByTagsContaining("java");
+        System.out.println("[QUERY] findByTagsContaining(\"java\") -> " + foundByTag.getName());
+
+        Document rawAdvanced = mongoTemplate.findOne(
+            new Query().addCriteria(new org.springframework.data.mongodb.core.query.Criteria("_id").is(advancedUser.getId())),
+            Document.class,
+            "advancedUser"
+        );
+        if (rawAdvanced != null) {
+            System.out.println("[RAW ADVANCED] MongoDB document (as stored):");
+            System.out.println("  homeAddress      = " + rawAdvanced.get("homeAddress")
+                + "  (nested street encrypted)");
+            System.out.println("  tags             = " + rawAdvanced.get("tags")
+                + "  (array element encryption)");
+            System.out.println("  settings         = " + rawAdvanced.get("settings")
+                + "  (map value encryption)");
+            System.out.println("  secureTags       = " + rawAdvanced.get("secureTags")
+                + "  (whole simple list as COL blob)");
+            System.out.println("  secureSettings   = " + rawAdvanced.get("secureSettings")
+                + "  (whole simple map as MAP blob)");
+            System.out.println("  secureAddresses  = " + rawAdvanced.get("secureAddresses")
+                + "  (whole-collection encrypted blob)\n");
         }
 
         System.out.println("=== Demo complete ===");

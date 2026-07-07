@@ -17,7 +17,12 @@ public class IntTestEntityConfig {
     public MongoMappingContextInitializer mappingContextInitializer(MongoMappingContext mappingContext) {
         mappingContext.setInitialEntitySet(Set.of(
                 IntTestUser.class,
-                IntTestEmployee.class
+            IntTestEmployee.class,
+            IntTestArticle.class,
+            IntTestWholeSimpleCollections.class,
+            IntTestUserWithAddresses.class,
+            IntTestUserWithWholeAddress.class,
+            IntTestUserWithWholeAddresses.class
         ));
         return new MongoMappingContextInitializer();
     }

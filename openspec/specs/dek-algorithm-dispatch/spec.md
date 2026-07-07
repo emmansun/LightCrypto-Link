@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the dek-algorithm-dispatch capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: SymmetricEncryptor strategy interface
 The system SHALL provide a `SymmetricEncryptor` interface with three methods: `encrypt(byte[] key, byte[] plaintext)`, `decrypt(byte[] key, byte[] data)`, and `computeKcv(byte[] key)`. Concrete implementations SHALL exist for each `SymmetricAlgorithm` value.
 
@@ -65,3 +68,5 @@ When encrypting a field, the system SHALL store the algorithm name in the `_a` f
 #### Scenario: New document with algorithm tag
 - **WHEN** a field with `@Encrypted(algorithm = SM4_GCM)` is saved
 - **THEN** the sub-document SHALL include `"_a": "SM4_GCM"`
+
+

@@ -14,5 +14,5 @@ public class TestUnsupportedEntity {
     private String id;
 
     @Encrypted
-    private Map<String, String> unsupportedField;
+    private Map unsupportedField;
 }

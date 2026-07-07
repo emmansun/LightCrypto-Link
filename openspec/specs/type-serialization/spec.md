@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the type-serialization capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: Deterministic serialization for supported types
 The system SHALL provide a `TypeSerializer` that converts Java values to deterministic String representations for encryption and blind index computation. The serialization SHALL be:
 - `String`: original value unchanged
@@ -28,19 +31,19 @@ The system SHALL provide a `TypeSerializer` that converts Java values to determi
 The system SHALL provide a `TypeDeserializer` that converts decrypted String values back to the original Java type, guided by the `_t` type marker stored in the BSON sub-document.
 
 Type markers:
-- `"STR"` → `String`
-- `"INT"` → `Integer`
-- `"LONG"` → `Long`
-- `"SHORT"` → `Short`
-- `"BYTE"` → `Byte`
-- `"FLOAT"` → `Float`
-- `"DOUBLE"` → `Double`
-- `"DEC"` → `BigDecimal`
-- `"BOOL"` → `Boolean`
-- `"LDATE"` → `LocalDate` (parse ISO-8601)
-- `"LDT"` → `LocalDateTime` (parse ISO-8601)
-- `"ENUM:<fqcn>"` → Enum (valueOf on specified class)
-- `"BYTES"` → `byte[]` (HexFormat parse)
+- `"STR"` -> `String`
+- `"INT"` -> `Integer`
+- `"LONG"` -> `Long`
+- `"SHORT"` -> `Short`
+- `"BYTE"` -> `Byte`
+- `"FLOAT"` -> `Float`
+- `"DOUBLE"` -> `Double`
+- `"DEC"` -> `BigDecimal`
+- `"BOOL"` -> `Boolean`
+- `"LDATE"` -> `LocalDate` (parse ISO-8601)
+- `"LDT"` -> `LocalDateTime` (parse ISO-8601)
+- `"ENUM:<fqcn>"` -> Enum (valueOf on specified class)
+- `"BYTES"` -> `byte[]` (HexFormat parse)
 
 #### Scenario: Deserialize Integer
 - **WHEN** the decrypted value is `"28"` with `_t = "INT"`
@@ -60,3 +63,5 @@ The system SHALL throw `UnsupportedTypeException` when an `@Encrypted` field's J
 #### Scenario: Custom object type
 - **WHEN** an `@Encrypted` field is declared as `Address` (custom class)
 - **THEN** the system SHALL throw `UnsupportedTypeException` at metadata scan time with a message indicating the type is not supported in v1
+
+

@@ -4,9 +4,12 @@ import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
+import io.github.emmansun.lightcrypto.model.PathSegmentType;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
+import org.bson.RawBsonDocument;
 import org.bson.types.Binary;
+import org.bson.codecs.DocumentCodec;
 
 import java.util.List;
 
@@ -20,6 +23,8 @@ import java.util.List;
  */
 @Slf4j
 public class FieldCryptoService {
+
+    private static final DocumentCodec DOCUMENT_CODEC = new DocumentCodec();
 
     private final EntityMetadataCache metadataCache;
     private final CryptoCodec cryptoCodec;
@@ -60,33 +65,112 @@ public class FieldCryptoService {
         }
 
         for (EncryptedFieldMetadata meta : fields) {
-            decryptField(rawDocument, meta);
+            decryptField(rawDocument, meta, 0);
         }
         return rawDocument;
     }
 
-    private void decryptField(Document document, EncryptedFieldMetadata meta) {
-        Object raw = document.get(meta.fieldName());
-        if (!(raw instanceof Document subDoc)) {
+    private void decryptField(Document document, EncryptedFieldMetadata meta, int depth) {
+        PathSegmentType pathType = meta.pathTypes().get(depth);
+        String segment = meta.path().get(depth);
+        boolean isLeaf = depth == meta.path().size() - 1;
+
+        if (pathType == PathSegmentType.FIELD) {
+            Object raw = document.get(segment);
+            if (raw == null) {
+                return;
+            }
+            if (isLeaf) {
+                Object value = decryptSubDocument(raw, meta);
+                if (value != null) {
+                    document.put(segment, value);
+                }
+                return;
+            }
+            if (raw instanceof Document nestedDoc) {
+                decryptField(nestedDoc, meta, depth + 1);
+            }
             return;
+        }
+
+        if (pathType == PathSegmentType.LIST_ITER) {
+            if (isLeaf && meta.wholeObject()) {
+                Object raw = document.get(segment);
+                Object value = decryptSubDocument(raw, meta);
+                if (value != null) {
+                    document.put(segment, value);
+                }
+                return;
+            }
+
+            Object rawArray = document.get(segment);
+            if (!(rawArray instanceof List<?> array)) {
+                return;
+            }
+
+            for (int i = 0; i < array.size(); i++) {
+                Object raw = array.get(i);
+                if (isLeaf) {
+                    Object value = decryptSubDocument(raw, meta);
+                    if (value != null) {
+                        ((List<Object>) array).set(i, value);
+                    }
+                } else if (raw instanceof Document nestedDoc) {
+                    decryptField(nestedDoc, meta, depth + 1);
+                }
+            }
+            return;
+        }
+
+        if (pathType == PathSegmentType.MAP_ITER) {
+            if (isLeaf && meta.wholeObject()) {
+                Object raw = document.get(segment);
+                Object value = decryptSubDocument(raw, meta);
+                if (value != null) {
+                    document.put(segment, value);
+                }
+                return;
+            }
+
+            Object rawMap = document.get(segment);
+            if (!(rawMap instanceof Document mapDoc)) {
+                return;
+            }
+            for (java.util.Map.Entry<String, Object> entry : mapDoc.entrySet()) {
+                Object raw = entry.getValue();
+                if (isLeaf) {
+                    Object value = decryptSubDocument(raw, meta);
+                    if (value != null) {
+                        entry.setValue(value);
+                    }
+                } else if (raw instanceof Document nestedDoc) {
+                    decryptField(nestedDoc, meta, depth + 1);
+                }
+            }
+        }
+    }
+
+    private Object decryptSubDocument(Object raw, EncryptedFieldMetadata meta) {
+        if (!(raw instanceof Document subDoc)) {
+            return null;
         }
 
         Integer eMarker = subDoc.getInteger("_e");
         if (eMarker == null || eMarker != 1) {
-            return;
+            return null;
         }
 
         String typeMarker = subDoc.getString("_t");
         Binary cipherBinary = subDoc.get("c", Binary.class);
         if (cipherBinary == null) {
-            return;
+            return null;
         }
 
         // Read kid from sub-document
         String kid = subDoc.getString("_k");
         if (kid == null) {
             throw new FatalCryptoException(
-                    "Encrypted sub-document for field '" + meta.fieldName() +
+                "Encrypted sub-document for field '" + meta.bsonFieldName() +
                             "' is missing '_k' (kid) field. Incompatible with multi-DEK format.");
         }
 
@@ -100,13 +184,25 @@ public class FieldCryptoService {
         byte[] dek = keyVaultService.getDek(kid);
         byte[] plaintext = cryptoCodec.decrypt(dek, cipherBinary.getData(), algorithm);
 
+        if ("DOC".equals(typeMarker) || "COL".equals(typeMarker) || "MAP".equals(typeMarker)) {
+            return decodeStructuredValue(typeMarker, plaintext);
+        }
+
         // Deserialize
         Object value = typeDeserializer.deserialize(typeMarker, plaintext);
 
-        // Replace encrypted sub-document with original value
-        document.put(meta.fieldName(), value);
-
         log.debug("Decrypted field '{}' using kid {} and algorithm {}",
-                meta.fieldName(), kid, algorithm);
+            meta.bsonFieldName(), kid, algorithm);
+        return value;
+    }
+
+    private Object decodeStructuredValue(String typeMarker, byte[] plaintext) {
+        Document payload = new RawBsonDocument(plaintext).decode(DOCUMENT_CODEC);
+
+        return switch (typeMarker) {
+            case "DOC", "MAP" -> payload;
+            case "COL" -> payload.getList("_v", Object.class);
+            default -> throw new IllegalArgumentException("Unsupported structured type marker: " + typeMarker);
+        };
     }
 }

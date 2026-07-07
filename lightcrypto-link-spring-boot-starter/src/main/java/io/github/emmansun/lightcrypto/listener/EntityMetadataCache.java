@@ -1,14 +1,22 @@
 package io.github.emmansun.lightcrypto.listener;
 
 import io.github.emmansun.lightcrypto.annotation.Encrypted;
+import io.github.emmansun.lightcrypto.annotation.EncryptionMode;
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
+import io.github.emmansun.lightcrypto.model.PathSegmentType;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.mongodb.core.mapping.DBRef;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.time.temporal.Temporal;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,6 +30,8 @@ import static io.github.emmansun.lightcrypto.service.TypeSerializer.isSupported;
  * accesses return the cached metadata list with zero reflection overhead.
  */
 public class EntityMetadataCache {
+
+    private static final int MAX_DEPTH = 5;
 
     private final CryptoProperties cryptoProperties;
     private final Map<Class<?>, List<EncryptedFieldMetadata>> cache = new ConcurrentHashMap<>();
@@ -58,48 +68,336 @@ public class EntityMetadataCache {
 
     private List<EncryptedFieldMetadata> scanFields(Class<?> entityClass) {
         List<EncryptedFieldMetadata> result = new ArrayList<>();
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        scanFieldsRecursive(
+                entityClass,
+                result,
+                new ArrayList<>(),
+                new ArrayList<>(),
+                new ArrayList<>(),
+                new HashSet<>(),
+                0
+        );
+        return Collections.unmodifiableList(result);
+    }
 
-        for (Field field : getAllFields(entityClass)) {
+    private void scanFieldsRecursive(Class<?> currentClass,
+                                     List<EncryptedFieldMetadata> result,
+                                     List<MethodHandle> accessorPrefix,
+                                     List<String> pathPrefix,
+                                     List<PathSegmentType> pathTypePrefix,
+                                     Set<Class<?>> visiting,
+                                     int depth) {
+        if (depth > MAX_DEPTH) {
+            throw new IllegalStateException("Maximum recursion depth " + MAX_DEPTH + " exceeded when scanning " + currentClass.getName());
+        }
+        if (!visiting.add(currentClass)) {
+            throw new IllegalStateException("Circular reference detected while scanning class: " + currentClass.getName());
+        }
+
+        MethodHandles.Lookup rootLookup = MethodHandles.lookup();
+        for (Field field : getAllFields(currentClass)) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                continue;
+            }
+            if (isExcludedField(field)) {
+                continue;
+            }
+
+            MethodHandle getter = createGetter(currentClass, field, rootLookup);
             Encrypted encrypted = field.getAnnotation(Encrypted.class);
-            if (encrypted == null) continue;
-
             Class<?> fieldType = field.getType();
-            if (!isSupported(fieldType)) {
+
+            if (encrypted != null) {
+                handleEncryptedField(result, accessorPrefix, pathPrefix, pathTypePrefix, field, fieldType, encrypted, getter);
+                continue;
+            }
+
+            if (isCollectionType(fieldType)) {
+                Class<?> elementType = resolveCollectionElementType(field);
+                if (isPojoType(elementType)) {
+                    List<MethodHandle> nextAccessors = append(accessorPrefix, getter);
+                    List<String> nextPath = append(pathPrefix, field.getName());
+                    List<PathSegmentType> nextPathTypes = append(pathTypePrefix, PathSegmentType.LIST_ITER);
+                    scanFieldsRecursive(elementType, result, nextAccessors, nextPath, nextPathTypes, visiting, depth + 1);
+                }
+                continue;
+            }
+
+            if (isMapType(fieldType)) {
+                Class<?> valueType = resolveMapValueType(field);
+                if (isPojoType(valueType)) {
+                    List<MethodHandle> nextAccessors = append(accessorPrefix, getter);
+                    List<String> nextPath = append(pathPrefix, field.getName());
+                    List<PathSegmentType> nextPathTypes = append(pathTypePrefix, PathSegmentType.MAP_ITER);
+                    scanFieldsRecursive(valueType, result, nextAccessors, nextPath, nextPathTypes, visiting, depth + 1);
+                }
+                continue;
+            }
+
+            if (isPojoType(fieldType)) {
+                List<MethodHandle> nextAccessors = append(accessorPrefix, getter);
+                List<String> nextPath = append(pathPrefix, field.getName());
+                List<PathSegmentType> nextPathTypes = append(pathTypePrefix, PathSegmentType.FIELD);
+                scanFieldsRecursive(fieldType, result, nextAccessors, nextPath, nextPathTypes, visiting, depth + 1);
+            }
+        }
+
+        visiting.remove(currentClass);
+    }
+
+    private void handleEncryptedField(List<EncryptedFieldMetadata> result,
+                                      List<MethodHandle> accessorPrefix,
+                                      List<String> pathPrefix,
+                                      List<PathSegmentType> pathTypePrefix,
+                                      Field field,
+                                      Class<?> fieldType,
+                                      Encrypted encrypted,
+                                      MethodHandle getter) {
+        SymmetricAlgorithm algo = (encrypted.algorithm() == SymmetricAlgorithm.DEFAULT)
+                ? cryptoProperties.getAlgorithm()
+                : encrypted.algorithm();
+
+        if (isCollectionType(fieldType)) {
+            Class<?> elementType = resolveCollectionElementType(field);
+            boolean wholeObject = resolveWholeObjectMode(field, elementType, encrypted, true);
+            validateWholeObjectMode(field, elementType, wholeObject, encrypted);
+            if (!wholeObject && !isSupported(elementType)) {
                 throw new UnsupportedTypeException(
-                        "Field '" + field.getName() + "' in class '" + entityClass.getName() +
-                                "' has unsupported type: " + fieldType.getName());
+                        "Field '" + field.getName() + "' in class '" + field.getDeclaringClass().getName() +
+                                "' has unsupported collection element type: " + elementType.getName());
             }
-
-            MethodHandle getter;
-            try {
-                MethodHandles.Lookup privateLookup = MethodHandles.privateLookupIn(entityClass, lookup);
-                getter = privateLookup.unreflectGetter(field);
-            } catch (IllegalAccessException e) {
-                throw new IllegalStateException(
-                        "Failed to create MethodHandle getter for field '" + field.getName() +
-                                "' in class '" + entityClass.getName() + "'", e);
-            }
-
-            String effectiveFieldName = encrypted.fieldName().isEmpty()
-                    ? field.getName()
-                    : encrypted.fieldName();
-
-            // Resolve DEFAULT to global default algorithm
-            SymmetricAlgorithm algo = (encrypted.algorithm() == SymmetricAlgorithm.DEFAULT)
-                    ? cryptoProperties.getAlgorithm()
-                    : encrypted.algorithm();
-
             result.add(new EncryptedFieldMetadata(
-                    getter,
-                    field.getName(),
-                    fieldType,
+                    append(accessorPrefix, getter),
+                    append(pathPrefix, field.getName()),
+                    append(pathTypePrefix, PathSegmentType.LIST_ITER),
+                    elementType,
                     algo,
                     encrypted.blindIndex(),
-                    effectiveFieldName
+                    wholeObject,
+                    encrypted.fieldName().isEmpty() ? String.join(".", append(pathPrefix, field.getName())) : encrypted.fieldName()
             ));
+            return;
         }
-        return Collections.unmodifiableList(result);
+
+        if (isMapType(fieldType)) {
+            Class<?> valueType = resolveMapValueType(field);
+            boolean wholeObject = resolveWholeObjectMode(field, valueType, encrypted, true);
+            validateWholeObjectMode(field, valueType, wholeObject, encrypted);
+            if (!wholeObject && !isSupported(valueType)) {
+                throw new UnsupportedTypeException(
+                        "Field '" + field.getName() + "' in class '" + field.getDeclaringClass().getName() +
+                                "' has unsupported map value type: " + valueType.getName());
+            }
+            result.add(new EncryptedFieldMetadata(
+                    append(accessorPrefix, getter),
+                    append(pathPrefix, field.getName()),
+                    append(pathTypePrefix, PathSegmentType.MAP_ITER),
+                    valueType,
+                    algo,
+                    encrypted.blindIndex(),
+                    wholeObject,
+                    encrypted.fieldName().isEmpty() ? String.join(".", append(pathPrefix, field.getName())) : encrypted.fieldName()
+            ));
+            return;
+        }
+
+        boolean wholeObject = resolveWholeObjectMode(field, fieldType, encrypted, false);
+        validateWholeObjectMode(field, fieldType, wholeObject, encrypted);
+        if (!wholeObject && !isSupported(fieldType)) {
+            throw new UnsupportedTypeException(
+                    "Field '" + field.getName() + "' in class '" + field.getDeclaringClass().getName() +
+                            "' has unsupported type: " + fieldType.getName());
+        }
+
+        result.add(new EncryptedFieldMetadata(
+                append(accessorPrefix, getter),
+                append(pathPrefix, field.getName()),
+                append(pathTypePrefix, PathSegmentType.FIELD),
+                fieldType,
+                algo,
+                encrypted.blindIndex(),
+                wholeObject,
+                encrypted.fieldName().isEmpty() ? String.join(".", append(pathPrefix, field.getName())) : encrypted.fieldName()
+        ));
+    }
+
+    private boolean resolveWholeObjectMode(Field field,
+                                           Class<?> valueType,
+                                           Encrypted encrypted,
+                                           boolean containerField) {
+        EncryptionMode mode = encrypted.mode();
+        boolean pojoType = isPojoType(valueType);
+
+        if (mode == EncryptionMode.WHOLE) {
+            if (!containerField && !pojoType) {
+                // Scalar/simple fields already use field-level encrypted sub-doc format.
+                return false;
+            }
+            return true;
+        }
+
+        if (mode == EncryptionMode.ELEMENT) {
+            if (containerField && pojoType) {
+                throw new UnsupportedTypeException(
+                        "Field '" + field.getName() + "' in class '" + field.getDeclaringClass().getName() +
+                                "' cannot use mode=ELEMENT for POJO collection/map values. " +
+                                "Use mode=WHOLE or remove @Encrypted from the container field and annotate nested fields instead.");
+            }
+            if (!containerField && pojoType) {
+                throw new UnsupportedTypeException(
+                        "Field '" + field.getName() + "' in class '" + field.getDeclaringClass().getName() +
+                                "' cannot use mode=ELEMENT for POJO fields.");
+            }
+            return false;
+        }
+
+        // AUTO mode keeps existing behavior.
+        return pojoType;
+    }
+
+    private MethodHandle createGetter(Class<?> ownerClass, Field field, MethodHandles.Lookup rootLookup) {
+        try {
+            MethodHandles.Lookup privateLookup = MethodHandles.privateLookupIn(ownerClass, rootLookup);
+            return privateLookup.unreflectGetter(field);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException(
+                    "Failed to create MethodHandle getter for field '" + field.getName() +
+                            "' in class '" + ownerClass.getName() + "'", e);
+        }
+    }
+
+    private boolean isExcludedField(Field field) {
+        return field.isAnnotationPresent(DBRef.class) || field.isAnnotationPresent(Transient.class);
+    }
+
+    private void validateWholeObjectMode(Field field, Class<?> valueType, boolean wholeObject, Encrypted encrypted) {
+        if (!wholeObject) {
+            return;
+        }
+        if (encrypted.blindIndex()) {
+            throw new UnsupportedTypeException(
+                    "Field '" + field.getName() + "' in class '" + field.getDeclaringClass().getName() +
+                            "' uses whole-object encryption and does not support blindIndex=true");
+        }
+        if (containsNestedEncryptedFields(valueType, new HashSet<>(), 0)) {
+            throw new IllegalStateException(
+                    "Field '" + field.getName() + "' uses whole-object encryption, but nested type '" + valueType.getName() +
+                            "' also declares @Encrypted fields. Use either whole-object or field-level encryption.");
+        }
+    }
+
+    private boolean containsNestedEncryptedFields(Class<?> type, Set<Class<?>> visiting, int depth) {
+        if (depth > MAX_DEPTH || !visiting.add(type)) {
+            return false;
+        }
+        for (Field field : getAllFields(type)) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                continue;
+            }
+            if (isExcludedField(field)) {
+                continue;
+            }
+            if (field.isAnnotationPresent(Encrypted.class)) {
+                return true;
+            }
+
+            Class<?> fieldType = field.getType();
+            if (isCollectionType(fieldType)) {
+                Class<?> elementType = resolveCollectionElementType(field);
+                if (isPojoType(elementType) && containsNestedEncryptedFields(elementType, visiting, depth + 1)) {
+                    return true;
+                }
+            } else if (isMapType(fieldType)) {
+                Class<?> valueType = resolveMapValueType(field);
+                if (isPojoType(valueType) && containsNestedEncryptedFields(valueType, visiting, depth + 1)) {
+                    return true;
+                }
+            } else if (isPojoType(fieldType) && containsNestedEncryptedFields(fieldType, visiting, depth + 1)) {
+                return true;
+            }
+        }
+        visiting.remove(type);
+        return false;
+    }
+
+    private boolean isCollectionType(Class<?> type) {
+        return Collection.class.isAssignableFrom(type);
+    }
+
+    private boolean isMapType(Class<?> type) {
+        return Map.class.isAssignableFrom(type);
+    }
+
+    private Class<?> resolveCollectionElementType(Field field) {
+        Type genericType = field.getGenericType();
+        if (!(genericType instanceof ParameterizedType pt)) {
+            throw new UnsupportedTypeException("Collection field '" + field.getName() + "' must declare a generic element type");
+        }
+        Type elementType = pt.getActualTypeArguments()[0];
+        Class<?> resolved = resolveClassType(elementType);
+        if (resolved == null) {
+            throw new UnsupportedTypeException("Collection field '" + field.getName() + "' has unsupported generic element type: " + elementType.getTypeName());
+        }
+        return resolved;
+    }
+
+    private Class<?> resolveMapValueType(Field field) {
+        Type genericType = field.getGenericType();
+        if (!(genericType instanceof ParameterizedType pt)) {
+            throw new UnsupportedTypeException("Map field '" + field.getName() + "' must declare generic key/value types");
+        }
+        Type keyType = pt.getActualTypeArguments()[0];
+        Class<?> keyClass = resolveClassType(keyType);
+        if (keyClass == null || !String.class.isAssignableFrom(keyClass)) {
+            throw new UnsupportedTypeException("Map field '" + field.getName() + "' must use String keys");
+        }
+        Type valueType = pt.getActualTypeArguments()[1];
+        Class<?> resolved = resolveClassType(valueType);
+        if (resolved == null) {
+            throw new UnsupportedTypeException("Map field '" + field.getName() + "' has unsupported generic value type: " + valueType.getTypeName());
+        }
+        return resolved;
+    }
+
+    private Class<?> resolveClassType(Type type) {
+        if (type instanceof Class<?> clazz) {
+            return clazz;
+        }
+        if (type instanceof ParameterizedType pt && pt.getRawType() instanceof Class<?> rawClass) {
+            return rawClass;
+        }
+        return null;
+    }
+
+    private boolean isPojoType(Class<?> type) {
+        if (type.isPrimitive() || isWrapperType(type) || isSupported(type)) {
+            return false;
+        }
+        if (type == String.class || type == BigDecimal.class || type == byte[].class) {
+            return false;
+        }
+        if (Temporal.class.isAssignableFrom(type)) {
+            return false;
+        }
+        if (type.isEnum() || type.isArray() || Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)) {
+            return false;
+        }
+        String pkg = type.getPackageName();
+        if (pkg.startsWith("java.") || pkg.startsWith("jakarta.")) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean isWrapperType(Class<?> type) {
+        return type == Integer.class || type == Long.class || type == Short.class || type == Byte.class
+                || type == Float.class || type == Double.class || type == Boolean.class || type == Character.class;
+    }
+
+    private <T> List<T> append(List<T> source, T value) {
+        List<T> copy = new ArrayList<>(source);
+        copy.add(value);
+        return copy;
     }
 
     private List<Field> getAllFields(Class<?> clazz) {

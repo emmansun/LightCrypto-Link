@@ -16,6 +16,9 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 - **Transparent Encryption** — annotate a field with `@Encrypted`, done. No extra code.
 - **Multiple Symmetric Algorithms** — choose per-field from AES-256-GCM, AES-256-CBC, SM4-GCM, SM4-CBC (via Bouncy Castle).
 - **Blind Index Queries** — `findByPhone("138...")` works on encrypted fields via HMAC blind index.
+- **Nested Object Encryption** — supports recursive encrypted fields in nested POJOs.
+- **Collection Encryption** — supports `List`/`Set`/`Map` element-level encryption and blind-index queries on collection elements.
+- **Whole-Object Encryption** — supports whole-object encryption for POJO field (`DOC`) and POJO collections/maps (`COL`/`MAP`).
 - **Multi-DEK Envelope Encryption** — each entity class has its own DEK, independently wrapped by the CMK; supports key rotation with versioned DEK entries.
 - **Type Preservation** — encrypts `String`, `Integer`, `Long`, `LocalDate`, `BigDecimal`, `byte[]`, enums, and more.
 - **Pluggable CMK** — built-in local symmetric CMK; cloud KMS providers for Azure Key Vault and Alibaba Cloud KMS (asymmetric RSA-OAEP).
@@ -110,6 +113,39 @@ public class User {
     @Encrypted
     private Integer age;                         // encrypted, no query
 }
+
+@Document
+public class AdvancedUser {
+  @Id private String id;
+
+  private Address homeAddress;             // nested POJO
+
+  @Encrypted(blindIndex = true)
+  private List<String> tags;               // element-level encryption + query
+
+  @Encrypted
+  private Map<String, String> settings;    // map value encryption
+
+  @Encrypted(mode = EncryptionMode.WHOLE)
+  private List<String> secureTags;          // whole simple list encryption (_t = "COL")
+
+  @Encrypted(mode = EncryptionMode.WHOLE)
+  private Map<String, String> secureSettings; // whole simple map encryption (_t = "MAP")
+
+  @Encrypted
+  private List<WholeAddress> secureAddresses; // whole-collection encryption (_t = "COL")
+
+  public static class Address {
+    @Encrypted
+    private String street;               // recursive nested field encryption
+    private String city;
+  }
+
+  public static class WholeAddress {
+    private String street;
+    private String city;
+  }
+}
 ```
 
 > `@Encrypted` without `algorithm` uses the global default from `lcl.crypto.algorithm` (default: `AES_256_GCM`).
@@ -139,7 +175,36 @@ User u = userRepository.findById(id).orElseThrow();
 
 // Query — blind index intercepts findByPhone
 User found = userRepository.findByPhone("13800138001");
+
+// Query on encrypted collection element via blind index rewrite
+AdvancedUser au = advancedUserRepository.findByTagsContaining("java");
 ```
+
+## Nested and Collection Encryption Behavior
+
+| Field pattern | Storage behavior |
+|---|---|
+| `@Encrypted String phone` | Scalar encrypted sub-document |
+| `List<Address>` with `Address.street @Encrypted` | Recursive element traversal; encrypts nested leaf fields |
+| `@Encrypted List<String> tags` | Element-level encrypted BSON Array |
+| `@Encrypted Map<String,String> settings` | Encrypted BSON Document values |
+| `@Encrypted Address address` | Whole object encrypted as `_t: "DOC"` |
+| `@Encrypted List<Address> addresses` | Whole collection encrypted as `_t: "COL"` |
+| `@Encrypted Map<String, Address> contacts` | Whole map encrypted as `_t: "MAP"` |
+
+> Note: whole-object mode does not support `blindIndex = true`, and cannot be mixed with nested `@Encrypted` fields in the same object graph.
+
+## Mode Selection Guide
+
+Use explicit mode when you want deterministic behavior on collection/map fields.
+
+| Goal | Recommended modeling |
+|---|---|
+| Need exact-match query (blind index) | `@Encrypted(blindIndex = true)` element-level mode |
+| Need query on collection elements | Keep default element-level mode, for example `@Encrypted List<String> tags` |
+| No query, maximize confidentiality for whole container | `@Encrypted(mode = WHOLE)` on `List<T>` / `Map<String, T>` |
+
+`mode = WHOLE` is supported for both POJO and simple-value collections/maps (`List<String>`, `Set<Integer>`, `Map<String, String>`).
 
 ## Configuration Reference
 
@@ -184,13 +249,62 @@ Each encrypted field is stored as a BSON sub-document:
 {
   "_k": "v1-a3b2c1d4",       // DEK version ID
   "_a": "AES_256_GCM",       // symmetric algorithm used
-  "t": "S",                  // type marker
-  "d": BinData(0, "..."),    // ciphertext
-  "b": BinData(0, "...")     // blind index (optional)
+  "_e": 1,                    // encryption marker
+  "_t": "STR",              // type marker (e.g. STR/INT/LDATE/ENUM...)
+  "c": BinData(0, "..."),    // ciphertext
+  "b": "base64-hmac"         // blind index (optional)
 }
 ```
 
 The `_a` tag enables **backward compatibility**: if absent, the reader defaults to `AES_256_GCM` (legacy documents).
+
+### Storage Examples (DOC/COL/MAP)
+
+Whole-object encryption uses the same envelope fields (`_k`, `_a`, `_e`) and distinguishes payload shape by `_t`.
+
+#### DOC: whole POJO field
+
+```json
+{
+  "address": {
+    "_k": "v2-9f8e7d6c",
+    "_a": "AES_256_GCM",
+    "_e": 1,
+    "_t": "DOC",
+    "c": BinData(0, "...ciphertext...")
+  }
+}
+```
+
+#### COL: whole collection field
+
+```json
+{
+  "secureAddresses": {
+    "_k": "v2-9f8e7d6c",
+    "_a": "AES_256_GCM",
+    "_e": 1,
+    "_t": "COL",
+    "c": BinData(0, "...ciphertext...")
+  }
+}
+```
+
+#### MAP: whole map field
+
+```json
+{
+  "contacts": {
+    "_k": "v2-9f8e7d6c",
+    "_a": "AES_256_GCM",
+    "_e": 1,
+    "_t": "MAP",
+    "c": BinData(0, "...ciphertext...")
+  }
+}
+```
+
+For scalar element-level encryption (for example `String` list elements or map `String` values), `_t` remains scalar types such as `STR`, `INT`, `LDATE`, etc.
 
 ### DEK Versioning & Rotation
 
@@ -213,7 +327,7 @@ LCL uses a **per-entity-class** DEK architecture:
 
 When `@Encrypted(blindIndex = true)` is set:
 - An HMAC-SHA256 hash is computed from the plaintext + field name.
-- The hash is Base64-encoded and stored alongside the ciphertext in the `b` field.
+- The hash is Base64-encoded and stored as a String in the `b` field.
 - `findByPhone(...)` is rewritten to query the HMAC index — no decryption needed.
 
 ## Supported Types

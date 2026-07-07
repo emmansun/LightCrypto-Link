@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the key-vault capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: Key vault document structure
 The system SHALL store wrapped DEK and HMAC key in a MongoDB collection named `__lcl_keyvault` with the following document structure: `_id` (String), `v` (int), `status` (String: ACTIVE/ROTATED/DISABLED), `dek` (embedded: wrapped Binary, algorithm String, kcv String), `hmk` (embedded: wrapped Binary, algorithm String, kcv String), `binding` (String), `cmk` (embedded: provider String, id String), `createdAt` (Date), `updatedAt` (Date).
 
@@ -47,3 +50,5 @@ The system SHALL verify the unwrapped DEK and HMAC key on every startup by recom
 #### Scenario: Binding mismatch
 - **WHEN** the recomputed binding does not match the stored `binding`
 - **THEN** the system SHALL throw `FatalCryptoException` with message indicating key pair mismatch
+
+

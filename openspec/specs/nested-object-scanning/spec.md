@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the nested-object-scanning capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: Recursive nested POJO field scanning
 `EntityMetadataCache` SHALL recursively scan fields of nested POJO objects when scanning an entity class. A field SHALL be treated as a nested POJO and recursively scanned if it meets ALL of the following conditions:
 - The field does NOT have `@Encrypted` annotation
@@ -98,10 +101,12 @@ When a POJO-typed field is annotated with `@Encrypted`, the system SHALL treat i
 ### Requirement: Annotation conflict detection (fail-fast)
 When a POJO-typed field is annotated with `@Encrypted` (whole-object) and the POJO type also contains `@Encrypted` fields internally (field-level), the system SHALL throw `IllegalStateException` at scan time, requiring the user to choose one mode.
 
-#### Scenario: @Encrypted on POJO + internal @Encrypted → conflict
+#### Scenario: @Encrypted on POJO + internal @Encrypted -> conflict
 - **WHEN** an entity has `@Encrypted private Address address` and `Address` has `@Encrypted private String street`
 - **THEN** the system SHALL throw `IllegalStateException` with a message indicating the annotation conflict
 
-#### Scenario: @Encrypted(blindIndex = true) on POJO → not supported
+#### Scenario: @Encrypted(blindIndex = true) on POJO -> not supported
 - **WHEN** an entity has `@Encrypted(blindIndex = true) private Address address`
 - **THEN** the system SHALL throw `UnsupportedTypeException` indicating whole-object encryption does not support blind index
+
+

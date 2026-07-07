@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the transparent-listener capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: Transparent encryption on write (BeforeSaveEvent)
 The system SHALL register an `AbstractMongoEventListener` that intercepts `BeforeSaveEvent`. For each entity, it SHALL look up `@Encrypted` fields via `EntityMetadataCache`, serialize each field value using `TypeSerializer`, encrypt it with `CryptoCodec`, and replace the field value in the BSON Document with an encrypted sub-document `{c: Binary, b?: String, _e: 1, _t: String}`.
 
@@ -36,3 +39,5 @@ The system SHALL gracefully handle missing, null, or already-processed fields wi
 #### Scenario: Missing encrypted field in document
 - **WHEN** a BSON Document does not contain a field that is marked `@Encrypted` in the entity
 - **THEN** the listener SHALL skip that field without error
+
+

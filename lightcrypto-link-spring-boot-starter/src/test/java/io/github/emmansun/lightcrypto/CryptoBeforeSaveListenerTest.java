@@ -6,13 +6,21 @@ import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.service.CryptoCodec;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeSerializer;
+import io.github.emmansun.lightcrypto.testmodel.TestArticle;
 import io.github.emmansun.lightcrypto.testmodel.TestEmployee;
 import io.github.emmansun.lightcrypto.testmodel.TestUser;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithAddresses;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithWholeAddress;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithWholeAddresses;
+import io.github.emmansun.lightcrypto.testmodel.TestWholeSimpleCollections;
 import org.bson.Document;
 import org.bson.types.Binary;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.mongodb.core.mapping.event.BeforeSaveEvent;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -65,5 +73,125 @@ class CryptoBeforeSaveListenerTest extends LclTestBase {
         doc.put("phone", null);
         listener.onBeforeSave(new BeforeSaveEvent<>(user, doc, "col"));
         assertThat(doc.get("phone")).isNull();
+    }
+
+    @Test
+    void encryptedListAndMapValuesAreTransformedToSubDocuments() {
+        TestArticle article = new TestArticle();
+        article.setTags(List.of("java", "spring"));
+        article.setSettings(Map.of("theme", "dark"));
+
+        Document doc = new Document();
+        doc.put("tags", List.of("java", "spring"));
+        doc.put("settings", new Document("theme", "dark"));
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(article, doc, "col"));
+
+        List<?> tags = (List<?>) doc.get("tags");
+        assertThat(tags).hasSize(2);
+        assertThat(tags.get(0)).isInstanceOf(Document.class);
+        Document tagSubDoc = (Document) tags.get(0);
+        assertThat(tagSubDoc.get("c")).isInstanceOf(Binary.class);
+        assertThat(tagSubDoc.get("b")).isInstanceOf(String.class);
+        assertThat(tagSubDoc.getString("_t")).isEqualTo("STR");
+
+        Document settings = (Document) doc.get("settings");
+        Document settingSubDoc = (Document) settings.get("theme");
+        assertThat(settingSubDoc.get("c")).isInstanceOf(Binary.class);
+        assertThat(settingSubDoc.getString("_t")).isEqualTo("STR");
+    }
+
+    @Test
+    void nestedPojoInsideListEncryptsLeafFieldOnly() {
+        TestUserWithAddresses user = new TestUserWithAddresses();
+        TestUserWithAddresses.Address address = new TestUserWithAddresses.Address();
+        address.setStreet("xx-road");
+        address.setCity("shanghai");
+        user.setAddresses(List.of(address));
+
+        Document addressDoc = new Document();
+        addressDoc.put("street", "xx-road");
+        addressDoc.put("city", "shanghai");
+        Document doc = new Document("addresses", new java.util.ArrayList<>(List.of(addressDoc)));
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(user, doc, "col"));
+
+        List<?> addresses = (List<?>) doc.get("addresses");
+        Document encryptedAddress = (Document) addresses.get(0);
+        assertThat(encryptedAddress.get("street")).isInstanceOf(Document.class);
+        Document streetSubDoc = (Document) encryptedAddress.get("street");
+        assertThat(streetSubDoc.get("c")).isInstanceOf(Binary.class);
+        assertThat(encryptedAddress.get("city")).isEqualTo("shanghai");
+    }
+
+    @Test
+    void wholeNestedObjectFieldEncryptsAsSingleDocBlob() {
+        TestUserWithWholeAddress user = new TestUserWithWholeAddress();
+        TestUserWithWholeAddress.Address address = new TestUserWithWholeAddress.Address();
+        address.setCity("shanghai");
+        address.setStreet("xx-road");
+        address.setZipCode("200001");
+        user.setAddress(address);
+
+        Document addressDoc = new Document();
+        addressDoc.put("city", "shanghai");
+        addressDoc.put("street", "xx-road");
+        addressDoc.put("zipCode", "200001");
+        Document doc = new Document("address", addressDoc);
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(user, doc, "col"));
+
+        Object raw = doc.get("address");
+        assertThat(raw).isInstanceOf(Document.class);
+        Document encrypted = (Document) raw;
+        assertThat(encrypted.get("c")).isInstanceOf(Binary.class);
+        assertThat(encrypted.getInteger("_e")).isEqualTo(1);
+        assertThat(encrypted.getString("_t")).isEqualTo("DOC");
+    }
+
+    @Test
+    void wholeCollectionFieldEncryptsAsSingleCollectionBlob() {
+        TestUserWithWholeAddresses user = new TestUserWithWholeAddresses();
+        TestUserWithWholeAddresses.Address address = new TestUserWithWholeAddresses.Address();
+        address.setCity("shanghai");
+        address.setStreet("xx-road");
+        user.setAddresses(List.of(address));
+
+        Document addressDoc = new Document();
+        addressDoc.put("city", "shanghai");
+        addressDoc.put("street", "xx-road");
+        Document doc = new Document("addresses", new java.util.ArrayList<>(List.of(addressDoc)));
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(user, doc, "col"));
+
+        Object raw = doc.get("addresses");
+        assertThat(raw).isInstanceOf(Document.class);
+        Document encrypted = (Document) raw;
+        assertThat(encrypted.get("c")).isInstanceOf(Binary.class);
+        assertThat(encrypted.getInteger("_e")).isEqualTo(1);
+        assertThat(encrypted.getString("_t")).isEqualTo("COL");
+    }
+
+    @Test
+    void wholeModeSimpleListAndMapEncryptAsSingleBlobs() {
+        TestWholeSimpleCollections entity = new TestWholeSimpleCollections();
+        entity.setTags(List.of("java", "spring"));
+        entity.setSettings(Map.of("theme", "dark"));
+
+        Document doc = new Document();
+        doc.put("tags", new java.util.ArrayList<>(List.of("java", "spring")));
+        doc.put("settings", new Document("theme", "dark"));
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(entity, doc, "col"));
+
+        assertThat(doc.get("tags")).isInstanceOf(Document.class);
+        Document tagsSub = (Document) doc.get("tags");
+        assertThat(tagsSub.get("c")).isInstanceOf(Binary.class);
+        assertThat(tagsSub.getString("_t")).isEqualTo("COL");
+
+        assertThat(doc.get("settings")).isInstanceOf(Document.class);
+        Document settingsSub = (Document) doc.get("settings");
+        assertThat(settingsSub.get("c")).isInstanceOf(Binary.class);
+        assertThat(settingsSub.getString("_t")).isEqualTo("MAP");
     }
 }

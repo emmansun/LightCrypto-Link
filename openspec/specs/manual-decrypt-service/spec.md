@@ -1,3 +1,7 @@
+## Purpose
+
+Define the behavioral contract for the manual-decrypt-service capability to match current implementation behavior.
+
 ## Requirements
 
 ### Requirement: FieldCryptoService decryptDocument API
@@ -54,7 +58,7 @@ The system SHALL provide a `FieldCryptoService` Spring Bean that exposes `Docume
 - **WHEN** an `@Encrypted` field's value is a `Document` but does not contain `_e: 1`
 - **THEN** the method SHALL skip that field without error
 
-#### Scenario: Idempotent — calling decryptDocument twice on the same Document
+#### Scenario: Idempotent - calling decryptDocument twice on the same Document
 - **WHEN** `decryptDocument` is called on an already-decrypted Document (field values are no longer sub-documents with `_e: 1`)
 - **THEN** the second call SHALL be a no-op for already-decrypted fields and return the Document unchanged
 
@@ -86,3 +90,5 @@ The system SHALL provide a `FieldCryptoService` Spring Bean that exposes `Docume
 #### Scenario: Transparent decryption still works after refactoring
 - **WHEN** `repository.findById(id)` returns an entity with encrypted fields
 - **THEN** the entity SHALL be returned with all encrypted fields decrypted, identical to pre-refactoring behavior
+
+

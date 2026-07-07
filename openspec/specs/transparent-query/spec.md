@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the transparent-query capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: Custom QueryLookup for encrypted fields
 The system SHALL provide a `CryptoMongoRepositoryFactory` that installs a custom `QueryLookupStrategy`. When a repository method name references a field annotated with `@Encrypted(blindIndex = true)`, the system SHALL transparently rewrite the query Criteria to target the blind index sub-field (`fieldName.b`) and hash the query value using the HMAC blind index.
 
@@ -38,3 +41,5 @@ The system SHALL reject query types that cannot be satisfied by a blind index (e
 #### Scenario: findByPhoneStartingWith rejection
 - **WHEN** `repository.findByPhoneStartingWith("139")` is called
 - **THEN** the system SHALL throw `UnsupportedOperationException` with a message indicating that prefix queries require blind index extension (v2)
+
+

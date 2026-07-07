@@ -45,4 +45,10 @@ public @interface Encrypted {
      * Can be explicitly set to share the same blind-index space across multiple entities.
      */
     String fieldName() default "";
+
+    /**
+     * Encryption mode for object/collection fields.
+     * Defaults to {@link EncryptionMode#AUTO} for backward compatibility.
+     */
+    EncryptionMode mode() default EncryptionMode.AUTO;
 }

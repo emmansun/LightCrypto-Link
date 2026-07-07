@@ -1,5 +1,8 @@
-## ADDED Requirements
+## Purpose
 
+Define the behavioral contract for the alibaba-kms-asymmetric capability to match current implementation behavior.
+
+## Requirements
 ### Requirement: AlibabaKmsCmkProvider implements CmkProvider
 The system SHALL provide `AlibabaKmsCmkProvider` implementing the `CmkProvider` SPI with:
 - `getProviderId()` returning `"alibaba-kms"`
@@ -99,4 +102,6 @@ Integration tests requiring real KMS credentials SHALL be annotated with `@Enabl
 
 #### Scenario: Tests run locally
 - **WHEN** environment variables `ALIBABA_AK_ID`, `ALIBABA_AK_SECRET`, `ALIBABA_KMS_KEY_ID` are set
-- **THEN** the integration test SHALL execute a full wrap→unwrap roundtrip against real Alibaba KMS
+- **THEN** the integration test SHALL execute a full wrap->unwrap roundtrip against real Alibaba KMS
+
+

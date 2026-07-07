@@ -6,6 +6,7 @@ import io.github.emmansun.lightcrypto.query.CryptoMongoQueryCreator;
 import io.github.emmansun.lightcrypto.service.CryptoCodec;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeSerializer;
+import io.github.emmansun.lightcrypto.testmodel.TestArticle;
 import io.github.emmansun.lightcrypto.testmodel.TestEmployee;
 import io.github.emmansun.lightcrypto.testmodel.TestUser;
 import org.bson.Document;
@@ -88,5 +89,32 @@ class CryptoMongoQueryCreatorTest extends LclTestBase {
         assertThatThrownBy(() -> qc.rewrite(q, TestUser.class))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("Pattern");
+    }
+
+    @Test
+    void findByTagsRewritesToArrayBlindIndex() {
+        Query q = new Query(Criteria.where("tags").is("java"));
+        Query r = qc.rewrite(q, TestArticle.class);
+        Document doc = r.getQueryObject();
+
+        String expected = codec.generateBlindIndex(
+                TEST_HMAC_KEY,
+                "tags",
+                "java".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+
+        assertThat(doc.getString("tags.b")).isEqualTo(expected);
+        assertThat(doc.containsKey("tags")).isFalse();
+    }
+
+    @Test
+    void findByTagsInRewritesEachToArrayBlindIndex() {
+        Query q = new Query(Criteria.where("tags").in(List.of("java", "spring")));
+        Query r = qc.rewrite(q, TestArticle.class);
+        Document doc = r.getQueryObject();
+        Document inDoc = (Document) doc.get("tags.b");
+        assertThat(inDoc).isNotNull();
+        List<String> hashed = (List<String>) inDoc.get("$in");
+        assertThat(hashed).hasSize(2);
     }
 }

@@ -12,8 +12,12 @@
             <Class name="~io\.github\.emmansun\.lightcrypto\.model\.KeyVaultDocument\$.+"/>
             <Class name="io.github.emmansun.lightcrypto.model.WrappedKey"/>
             <Class name="io.github.emmansun.lightcrypto.listener.EntityMetadataCache"/>
+            <Class name="io.github.emmansun.lightcrypto.listener.CryptoBeforeSaveListener"/>
+            <Class name="io.github.emmansun.lightcrypto.listener.CryptoMappingMongoConverter"/>
+            <Class name="io.github.emmansun.lightcrypto.query.CryptoMongoQueryCreator"/>
             <Class name="io.github.emmansun.lightcrypto.query.CryptoMongoRepositoryFactory"/>
             <Class name="io.github.emmansun.lightcrypto.query.CryptoQueryLookupStrategy"/>
+            <Class name="io.github.emmansun.lightcrypto.service.FieldCryptoService"/>
             <Class name="io.github.emmansun.lightcrypto.service.KeyVaultService"/>
         </Or>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>

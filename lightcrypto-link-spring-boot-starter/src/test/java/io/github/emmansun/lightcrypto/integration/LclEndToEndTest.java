@@ -13,7 +13,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -37,10 +39,30 @@ class LclEndToEndTest {
     @Autowired
     private KeyVaultService keyVaultService;
 
+    @Autowired
+    private IntTestArticleRepository articleRepository;
+
+    @Autowired
+    private IntTestUserWithWholeAddressRepository wholeAddressRepository;
+
+    @Autowired
+    private IntTestUserWithWholeAddressesRepository wholeAddressesRepository;
+
+    @Autowired
+    private IntTestUserWithAddressesRepository addressesRepository;
+
+    @Autowired
+    private IntTestWholeSimpleCollectionsRepository wholeSimpleCollectionsRepository;
+
     @BeforeEach
     void cleanCollections() {
         mongoTemplate.dropCollection(IntTestUser.class);
         mongoTemplate.dropCollection(IntTestEmployee.class);
+        mongoTemplate.dropCollection(IntTestArticle.class);
+        mongoTemplate.dropCollection(IntTestWholeSimpleCollections.class);
+        mongoTemplate.dropCollection(IntTestUserWithAddresses.class);
+        mongoTemplate.dropCollection(IntTestUserWithWholeAddress.class);
+        mongoTemplate.dropCollection(IntTestUserWithWholeAddresses.class);
     }
 
     // ===== 6.6-6.10: KeyVaultService Tests =====
@@ -210,5 +232,180 @@ class LclEndToEndTest {
         IntTestUser loaded = userRepository.findById(user.getId()).orElseThrow();
         assertThat(loaded.getPhone()).isNull();
         assertThat(loaded.getName()).isEqualTo("Eve");
+    }
+
+    @Test
+    @Order(17)
+    void collectionEncryptedFieldsSaveReadAndRawBsonShape() {
+        IntTestArticle article = new IntTestArticle();
+        article.setTitle("Collection Crypto");
+        article.setTags(List.of("java", "spring"));
+        article.setSettings(Map.of("theme", "dark"));
+
+        articleRepository.save(article);
+
+        IntTestArticle loaded = articleRepository.findById(article.getId()).orElseThrow();
+        assertThat(loaded.getTags()).containsExactly("java", "spring");
+        assertThat(loaded.getSettings().get("theme")).isEqualTo("dark");
+
+        Document raw = mongoTemplate.getDb().getCollection("intTestArticle")
+            .find(new Document("title", "Collection Crypto")).first();
+        assertThat(raw).isNotNull();
+
+        Object tagsRaw = raw.get("tags");
+        assertThat(tagsRaw).isInstanceOf(List.class);
+        List<?> tagsDoc = (List<?>) tagsRaw;
+        assertThat(tagsDoc).isNotEmpty();
+        assertThat(tagsDoc.get(0)).isInstanceOf(Document.class);
+        Document tagSub = (Document) tagsDoc.get(0);
+        assertThat(tagSub.get("c")).isNotNull();
+        assertThat(tagSub.get("b")).isNotNull();
+        assertThat(tagSub.getInteger("_e")).isEqualTo(1);
+
+        Document settingsRaw = raw.get("settings", Document.class);
+        assertThat(settingsRaw).isNotNull();
+        Document settingSub = settingsRaw.get("theme", Document.class);
+        assertThat(settingSub).isNotNull();
+        assertThat(settingSub.get("c")).isNotNull();
+        assertThat(settingSub.getInteger("_e")).isEqualTo(1);
+    }
+
+    @Test
+    @Order(18)
+    void collectionBlindIndexFindByTagsContainingWorks() {
+        IntTestArticle article = new IntTestArticle();
+        article.setTitle("Find by tag");
+        article.setTags(new ArrayList<>(List.of("security", "crypto")));
+        articleRepository.save(article);
+
+        IntTestArticle found = articleRepository.findByTagsContaining("security");
+        assertThat(found).isNotNull();
+        assertThat(found.getId()).isEqualTo(article.getId());
+        assertThat(found.getTags()).contains("security", "crypto");
+    }
+
+    @Test
+    @Order(19)
+    void wholeNestedObjectSaveReadAndRawBsonShape() {
+        IntTestUserWithWholeAddress user = new IntTestUserWithWholeAddress();
+        user.setName("Whole User");
+        IntTestUserWithWholeAddress.Address address = new IntTestUserWithWholeAddress.Address();
+        address.setStreet("xx-road");
+        address.setCity("shanghai");
+        address.setZipCode("200001");
+        user.setAddress(address);
+
+        wholeAddressRepository.save(user);
+
+        IntTestUserWithWholeAddress loaded = wholeAddressRepository.findById(user.getId()).orElseThrow();
+        assertThat(loaded.getAddress()).isNotNull();
+        assertThat(loaded.getAddress().getStreet()).isEqualTo("xx-road");
+        assertThat(loaded.getAddress().getCity()).isEqualTo("shanghai");
+        assertThat(loaded.getAddress().getZipCode()).isEqualTo("200001");
+
+        Document raw = mongoTemplate.getDb().getCollection("intTestUserWithWholeAddress")
+                .find(new Document("name", "Whole User")).first();
+        assertThat(raw).isNotNull();
+
+        Object addressRaw = raw.get("address");
+        assertThat(addressRaw).isInstanceOf(Document.class);
+        Document addressSub = (Document) addressRaw;
+        assertThat(addressSub.get("c")).isNotNull();
+        assertThat(addressSub.getInteger("_e")).isEqualTo(1);
+        assertThat(addressSub.getString("_t")).isEqualTo("DOC");
+    }
+
+    @Test
+    @Order(20)
+    void wholeCollectionSaveReadAndRawBsonShape() {
+        IntTestUserWithWholeAddresses user = new IntTestUserWithWholeAddresses();
+        user.setName("Whole Addresses User");
+        IntTestUserWithWholeAddresses.Address address = new IntTestUserWithWholeAddresses.Address();
+        address.setStreet("yy-road");
+        address.setCity("beijing");
+        user.setAddresses(List.of(address));
+
+        wholeAddressesRepository.save(user);
+
+        IntTestUserWithWholeAddresses loaded = wholeAddressesRepository.findById(user.getId()).orElseThrow();
+        assertThat(loaded.getAddresses()).hasSize(1);
+        assertThat(loaded.getAddresses().get(0).getStreet()).isEqualTo("yy-road");
+        assertThat(loaded.getAddresses().get(0).getCity()).isEqualTo("beijing");
+
+        Document raw = mongoTemplate.getDb().getCollection("intTestUserWithWholeAddresses")
+                .find(new Document("name", "Whole Addresses User")).first();
+        assertThat(raw).isNotNull();
+
+        Object addressesRaw = raw.get("addresses");
+        assertThat(addressesRaw).isInstanceOf(Document.class);
+        Document addressesSub = (Document) addressesRaw;
+        assertThat(addressesSub.get("c")).isNotNull();
+        assertThat(addressesSub.getInteger("_e")).isEqualTo(1);
+        assertThat(addressesSub.getString("_t")).isEqualTo("COL");
+    }
+
+    @Test
+    @Order(21)
+    void recursivePojoCollectionStreetEncryptedSaveReadAndRawBsonShape() {
+        IntTestUserWithAddresses user = new IntTestUserWithAddresses();
+        user.setName("Recursive User");
+        IntTestUserWithAddresses.Address address = new IntTestUserWithAddresses.Address();
+        address.setStreet("zz-road");
+        address.setCity("hangzhou");
+        user.setAddresses(List.of(address));
+
+        addressesRepository.save(user);
+
+        IntTestUserWithAddresses loaded = addressesRepository.findById(user.getId()).orElseThrow();
+        assertThat(loaded.getAddresses()).hasSize(1);
+        assertThat(loaded.getAddresses().get(0).getStreet()).isEqualTo("zz-road");
+        assertThat(loaded.getAddresses().get(0).getCity()).isEqualTo("hangzhou");
+
+        Document raw = mongoTemplate.getDb().getCollection("intTestUserWithAddresses")
+                .find(new Document("name", "Recursive User")).first();
+        assertThat(raw).isNotNull();
+
+        Object addressesRaw = raw.get("addresses");
+        assertThat(addressesRaw).isInstanceOf(List.class);
+        List<?> rawList = (List<?>) addressesRaw;
+        assertThat(rawList).hasSize(1);
+        assertThat(rawList.get(0)).isInstanceOf(Document.class);
+        Document addressDoc = (Document) rawList.get(0);
+        assertThat(addressDoc.get("street")).isInstanceOf(Document.class);
+        Document streetSub = (Document) addressDoc.get("street");
+        assertThat(streetSub.get("c")).isNotNull();
+        assertThat(streetSub.getInteger("_e")).isEqualTo(1);
+        assertThat(addressDoc.getString("city")).isEqualTo("hangzhou");
+    }
+
+    @Test
+    @Order(22)
+    void wholeSimpleCollectionAndMapSaveReadAndRawBsonShape() {
+        IntTestWholeSimpleCollections entity = new IntTestWholeSimpleCollections();
+        entity.setName("Whole Simple");
+        entity.setTags(List.of("java", "spring"));
+        entity.setSettings(Map.of("theme", "dark"));
+
+        wholeSimpleCollectionsRepository.save(entity);
+
+        IntTestWholeSimpleCollections loaded = wholeSimpleCollectionsRepository.findById(entity.getId()).orElseThrow();
+        assertThat(loaded.getTags()).containsExactly("java", "spring");
+        assertThat(loaded.getSettings().get("theme")).isEqualTo("dark");
+
+        Document raw = mongoTemplate.getDb().getCollection("intTestWholeSimpleCollections")
+                .find(new Document("name", "Whole Simple")).first();
+        assertThat(raw).isNotNull();
+
+        assertThat(raw.get("tags")).isInstanceOf(Document.class);
+        Document tagsSub = (Document) raw.get("tags");
+        assertThat(tagsSub.get("c")).isNotNull();
+        assertThat(tagsSub.getInteger("_e")).isEqualTo(1);
+        assertThat(tagsSub.getString("_t")).isEqualTo("COL");
+
+        assertThat(raw.get("settings")).isInstanceOf(Document.class);
+        Document settingsSub = (Document) raw.get("settings");
+        assertThat(settingsSub.get("c")).isNotNull();
+        assertThat(settingsSub.getInteger("_e")).isEqualTo(1);
+        assertThat(settingsSub.getString("_t")).isEqualTo("MAP");
     }
 }
