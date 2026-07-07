@@ -10,46 +10,11 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>lightcrypto-link-alibaba-kms</artifactId>
+    <artifactId>lightcrypto-link-spi</artifactId>
     <packaging>jar</packaging>
 
-    <name>LightCrypto-Link :: Alibaba Cloud KMS CMK Provider</name>
-    <description>Alibaba Cloud KMS CMK provider for LightCrypto-Link (v2 roadmap).</description>
-
-    <dependencies>
-        <!-- LCL SPI -->
-        <dependency>
-            <groupId>io.github.emmansun</groupId>
-            <artifactId>lightcrypto-link-spi</artifactId>
-        </dependency>
-
-        <!-- Alibaba Cloud KMS SDK -->
-        <dependency>
-            <groupId>com.aliyun</groupId>
-            <artifactId>kms20160120</artifactId>
-        </dependency>
-
-        <!-- Spring Boot (for auto-configuration) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-
-        <!-- Lombok -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>1.18.46</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- Test -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+    <name>LightCrypto-Link :: SPI</name>
+    <description>Provider SPI and shared lightweight contracts for LightCrypto-Link modules.</description>
 
     <build>
         <plugins>
@@ -59,16 +24,8 @@
                 <configuration>
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>1.18.46</version>
-                        </path>
-                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
-            <!-- Source JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
@@ -81,7 +38,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- Javadoc JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>

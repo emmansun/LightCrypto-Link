@@ -1,7 +1,7 @@
 package io.github.emmansun.lightcrypto.exception;
 
 /**
- * General-purpose exception for encryption/decryption operations.
+ * Base runtime exception for cryptographic operations across LCL modules.
  */
 public class CryptoException extends RuntimeException {
     public CryptoException(String message) {

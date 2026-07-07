@@ -37,6 +37,7 @@
     </licenses>
 
     <modules>
+        <module>lightcrypto-link-spi</module>
         <module>lightcrypto-link-spring-boot-starter</module>
         <module>lightcrypto-link-spring-boot-starter-jdk</module>
         <module>lightcrypto-link-azure-kms</module>
@@ -52,6 +53,9 @@
         <!-- Dependency versions -->
         <spring-boot.version>3.2.5</spring-boot.version>
         <bouncycastle.version>1.84</bouncycastle.version>
+        <azure.keyvault.keys.version>4.11.1</azure.keyvault.keys.version>
+        <azure.identity.version>1.18.4</azure.identity.version>
+        <aliyun.kms.version>2.0.0</aliyun.kms.version>
 
         <!-- Plugin versions -->
         <checkstyle.version>10.17.0</checkstyle.version>
@@ -70,6 +74,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>io.github.emmansun</groupId>
+                <artifactId>lightcrypto-link-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>io.github.emmansun</groupId>
                 <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
@@ -119,6 +128,21 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcpkix-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-security-keyvault-keys</artifactId>
+                <version>${azure.keyvault.keys.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-identity</artifactId>
+                <version>${azure.identity.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.aliyun</groupId>
+                <artifactId>kms20160120</artifactId>
+                <version>${aliyun.kms.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

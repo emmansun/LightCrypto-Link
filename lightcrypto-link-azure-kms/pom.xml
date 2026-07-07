@@ -17,24 +17,22 @@
     <description>Azure Key Vault CMK provider for LightCrypto-Link.</description>
 
     <dependencies>
-        <!-- LCL Starter (for CmkProvider SPI) -->
+        <!-- LCL SPI -->
         <dependency>
             <groupId>io.github.emmansun</groupId>
-            <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+            <artifactId>lightcrypto-link-spi</artifactId>
         </dependency>
 
         <!-- Azure Key Vault SDK -->
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-security-keyvault-keys</artifactId>
-            <version>4.11.1</version>
         </dependency>
 
         <!-- Azure Identity (for DefaultAzureCredential / ClientSecretCredential) -->
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-identity</artifactId>
-            <version>1.18.4</version>
         </dependency>
 
         <!-- Spring Boot (for auto-configuration) -->

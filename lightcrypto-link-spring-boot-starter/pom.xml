@@ -17,6 +17,11 @@
     <description>A pure Java, lightweight application-level field encryption component with blind index and multi-KMS/SM-crypto support for Spring Boot MongoDB.</description>
 
     <dependencies>
+        <dependency>
+            <groupId>io.github.emmansun</groupId>
+            <artifactId>lightcrypto-link-spi</artifactId>
+        </dependency>
+
         <!-- 1. Spring Boot core & auto-configuration -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
