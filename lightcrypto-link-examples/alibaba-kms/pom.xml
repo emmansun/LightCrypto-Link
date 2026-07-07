@@ -17,10 +17,20 @@
     <description>Demo: field encryption with Alibaba Cloud KMS as CMK provider.</description>
 
     <dependencies>
-        <!-- LCL JDK-only Starter -->
+        <!-- LCL Starter -->
         <dependency>
             <groupId>io.github.emmansun</groupId>
-            <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
+            <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- Bouncy Castle (required for SM4 algorithm family) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk18on</artifactId>
         </dependency>
 
         <!-- LCL Alibaba KMS CMK Provider -->

@@ -2,6 +2,7 @@
 lcl:
   crypto:
     enabled: true
+    algorithm: SM4_GCM
     alibaba:
       access-key-id: ${ALIBABA_AK_ID}
       access-key-secret: ${ALIBABA_AK_SECRET}
