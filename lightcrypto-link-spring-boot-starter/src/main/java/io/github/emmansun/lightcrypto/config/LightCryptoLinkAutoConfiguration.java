@@ -93,6 +93,20 @@ public class LightCryptoLinkAutoConfiguration {
         return new FieldCryptoService(metadataCache, cryptoCodec, typeDeserializer, keyVaultService);
     }
 
+    @Bean
+    public ProgrammaticCryptoService programmaticCryptoService(CryptoCodec cryptoCodec,
+                                                               TypeSerializer typeSerializer,
+                                                               TypeDeserializer typeDeserializer,
+                                                               @Lazy KeyVaultService keyVaultService,
+                                                               FieldCryptoService fieldCryptoService) {
+        return new ProgrammaticCryptoService(
+                cryptoCodec,
+                typeSerializer,
+                typeDeserializer,
+                keyVaultService,
+                fieldCryptoService);
+    }
+
     /**
      * Custom MappingMongoConverter — decrypts @Encrypted fields during read().
      * The @ConditionalOnMissingBean(MongoConverter.class) in Spring Boot's

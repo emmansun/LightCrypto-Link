@@ -207,6 +207,39 @@ User found = userRepository.findByPhone("13800138001");
 AdvancedUser au = advancedUserRepository.findByTagsContaining("java");
 ```
 
+### 5. Programmatic API (Optional)
+
+Use `ProgrammaticCryptoService` when annotation-driven persistence flow is not available
+(for example: DTO/message encryption, migration scripts, native query results).
+
+```java
+@Service
+public class SensitivePayloadService {
+
+  private final ProgrammaticCryptoService programmaticCryptoService;
+
+  public SensitivePayloadService(ProgrammaticCryptoService programmaticCryptoService) {
+    this.programmaticCryptoService = programmaticCryptoService;
+  }
+
+  public Document encryptPhone(String phone) {
+    // Key scope determines which entity vault/DEK is used.
+    return programmaticCryptoService.encryptValue(phone, User.class);
+  }
+
+  public String decryptPhone(Document encryptedSubDoc) {
+    return (String) programmaticCryptoService.decryptValue(encryptedSubDoc);
+  }
+
+  public Document decryptRawUser(Document rawUserDoc) {
+    // In-place decryption of all @Encrypted fields for User mapping metadata.
+    return programmaticCryptoService.decryptDocument(rawUserDoc, User.class);
+  }
+}
+```
+
+Encrypted value format remains consistent with repository flow (`_e`, `_k`, `_a`, `_t`, `c`).
+
 ## Nested and Collection Encryption Behavior
 
 | Field pattern | Storage behavior |
