@@ -60,7 +60,9 @@ jobs:
         with:
           generate_release_notes: true
           files: |
+            lightcrypto-link-spi/target/*.jar
             lightcrypto-link-spring-boot-starter/target/*.jar
+            lightcrypto-link-spring-boot-starter-jdk/target/*.jar
             lightcrypto-link-azure-kms/target/*.jar
             lightcrypto-link-alibaba-kms/target/*.jar
 
