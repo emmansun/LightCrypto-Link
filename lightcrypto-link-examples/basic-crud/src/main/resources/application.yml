@@ -17,3 +17,18 @@ spring:
   data:
     mongodb:
       database: lcl-demo
+
+# Migration backfill switches (example):
+# - Disable demo data reset runner when running backfill
+# - Run with JVM args instead of hardcoding here, for example:
+#   mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dlcl.demo.enabled=false -Dlcl.migration.backfill.enabled=true -Dlcl.migration.backfill.dry-run=true -Dlcl.migration.backfill.batch-size=500"
+#lcl:
+#  demo:
+#    enabled: false
+#  migration:
+#    backfill:
+#      enabled: true
+#      dry-run: true
+#      batch-size: 500
+#      start-after-id: ""
+#      max-batches: 0

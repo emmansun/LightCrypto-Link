@@ -1,6 +1,7 @@
 package io.github.emmansun.lightcrypto.example.basiccrud;
 
 import io.github.emmansun.lightcrypto.service.FieldCryptoService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.bson.Document;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -16,6 +17,7 @@ import java.util.Map;
  * and manual decryption via FieldCryptoService for raw Documents.
  */
 @Component
+@ConditionalOnProperty(name = "lcl.demo.enabled", havingValue = "true", matchIfMissing = true)
 public class DemoRunner implements CommandLineRunner {
 
     private final UserRepository userRepository;

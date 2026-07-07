@@ -390,6 +390,9 @@ When `@Encrypted(blindIndex = true)` is set:
 - The hash is Base64-encoded and stored as a String in the `b` field.
 - `findByPhone(...)` is rewritten to query the HMAC index — no decryption needed.
 
+Migration note for existing plaintext historical data:
+- See [docs/migration/introduce-lcl-to-existing-plaintext-data.md](docs/migration/introduce-lcl-to-existing-plaintext-data.md)
+
 ## Supported Types
 
 | Java Type | Encrypted | Blind Index |
