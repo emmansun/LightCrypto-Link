@@ -412,6 +412,7 @@ Implement `CmkProvider` to integrate with your KMS:
 ```java
 public interface CmkProvider {
     String getProviderId();           // unique identifier
+    String getPublicReference();      // a non-secret public reference for the CMK used by this provider
     WrappedKey wrap(byte[] key);      // encrypt a DEK with the CMK
     byte[] unwrap(WrappedKey wrapped); // decrypt a wrapped DEK
 }
