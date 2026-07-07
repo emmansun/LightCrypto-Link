@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://apache.org"
+         xmlns:xsi="http://w3.org"
+         xsi:schemaLocation="http://apache.org http://apache.org">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.emmansun</groupId>
+        <artifactId>lightcrypto-link-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
+    <packaging>jar</packaging>
+
+    <name>LightCrypto-Link (LCL) :: JDK Starter</name>
+    <description>JDK-only starter aggregator for LightCrypto-Link without transitive Bouncy Castle dependencies.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.emmansun</groupId>
+            <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+</project>

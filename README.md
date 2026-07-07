@@ -29,11 +29,38 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 
 ### 1. Add Dependency
 
+For new projects, prefer the JDK-only starter (lighter dependency footprint):
+
+```xml
+<dependency>
+  <groupId>io.github.emmansun</groupId>
+  <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+Or use the full starter directly:
+
 ```xml
 <dependency>
     <groupId>io.github.emmansun</groupId>
     <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
     <version>1.0.0</version>
+</dependency>
+```
+
+The starter marks Bouncy Castle as optional transitively. If you need SM2/SM3/SM4 algorithms, add these explicitly in your application:
+
+```xml
+<dependency>
+  <groupId>org.bouncycastle</groupId>
+  <artifactId>bcprov-jdk18on</artifactId>
+  <version>1.84</version>
+</dependency>
+<dependency>
+  <groupId>org.bouncycastle</groupId>
+  <artifactId>bcpkix-jdk18on</artifactId>
+  <version>1.84</version>
 </dependency>
 ```
 
@@ -390,6 +417,7 @@ mvn clean verify
 ```
 LightCrypto-Link/
 ├── lightcrypto-link-spring-boot-starter/   # Library (Spring Boot starter)
+├── lightcrypto-link-spring-boot-starter-jdk/ # JDK-only starter (lightweight)
 ├── lightcrypto-link-azure-kms/             # Azure Key Vault CMK Provider
 ├── lightcrypto-link-alibaba-kms/           # Alibaba Cloud KMS CMK Provider
 ├── lightcrypto-link-examples/              # Example applications

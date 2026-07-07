@@ -38,6 +38,7 @@
 
     <modules>
         <module>lightcrypto-link-spring-boot-starter</module>
+        <module>lightcrypto-link-spring-boot-starter-jdk</module>
         <module>lightcrypto-link-azure-kms</module>
         <module>lightcrypto-link-alibaba-kms</module>
         <module>lightcrypto-link-examples</module>
@@ -72,6 +73,11 @@
             <dependency>
                 <groupId>io.github.emmansun</groupId>
                 <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.emmansun</groupId>
+                <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

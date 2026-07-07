@@ -17,10 +17,10 @@
     <description>Demo: field encryption with Alibaba Cloud KMS as CMK provider.</description>
 
     <dependencies>
-        <!-- LCL Starter -->
+        <!-- LCL JDK-only Starter -->
         <dependency>
             <groupId>io.github.emmansun</groupId>
-            <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+            <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
         </dependency>
 
         <!-- LCL Alibaba KMS CMK Provider -->

@@ -17,10 +17,10 @@
     <description>Minimal demo: encrypted CRUD + blind index query with CommandLineRunner.</description>
 
     <dependencies>
-        <!-- LCL Starter -->
+        <!-- LCL JDK-only Starter -->
         <dependency>
             <groupId>io.github.emmansun</groupId>
-            <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+            <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
         </dependency>
 
         <!-- Spring Boot -->
