@@ -2,13 +2,13 @@ package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.util.CryptoUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.Security;
-import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HexFormat;
 
@@ -31,15 +31,11 @@ public class Sm4CbcEncryptor implements SymmetricEncryptor {
         }
     }
 
-    private final SecureRandom secureRandom = new SecureRandom();
-
     @Override
     public byte[] encrypt(byte[] key, byte[] plaintext) {
         try {
             byte[] sm4Key = Arrays.copyOf(key, SM4_KEY_LENGTH);
-            byte[] iv = new byte[IV_LENGTH];
-            secureRandom.nextBytes(iv);
-
+            byte[] iv = CryptoUtils.generateRandomBytes(IV_LENGTH);
             Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM, BouncyCastleProvider.PROVIDER_NAME);
             cipher.init(Cipher.ENCRYPT_MODE,
                     new SecretKeySpec(sm4Key, KEY_ALGORITHM),

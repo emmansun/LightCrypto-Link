@@ -2,11 +2,10 @@ package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
-
+import io.github.emmansun.lightcrypto.util.CryptoUtils;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HexFormat;
 
@@ -21,14 +20,10 @@ public class AesCbcEncryptor implements SymmetricEncryptor {
     private static final String CIPHER_ALGORITHM = "AES/CBC/PKCS5Padding";
     private static final String KEY_ALGORITHM = "AES";
 
-    private final SecureRandom secureRandom = new SecureRandom();
-
     @Override
     public byte[] encrypt(byte[] key, byte[] plaintext) {
         try {
-            byte[] iv = new byte[IV_LENGTH];
-            secureRandom.nextBytes(iv);
-
+            byte[] iv = CryptoUtils.generateRandomBytes(IV_LENGTH);
             Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
             cipher.init(Cipher.ENCRYPT_MODE,
                     new SecretKeySpec(key, KEY_ALGORITHM),
