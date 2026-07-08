@@ -9,6 +9,7 @@ Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match quer
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2%2B-brightgreen.svg)](https://spring.io/projects/spring-boot)
+![Maven Central Version](https://img.shields.io/maven-central/v/io.github.emmansun/lightcrypto-link-spring-boot-starter)
 
 ---
 
