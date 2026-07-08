@@ -92,6 +92,35 @@ class AzureKeyVaultCmkProviderTest {
                 .hasMessageContaining("cryptoClient must not be null");
     }
 
+        @Test
+        void wrap_shouldRejectNullOrEmptyKey() {
+        AzureKeyVaultCmkProvider provider = createProvider();
+
+        assertThatThrownBy(() -> provider.wrap(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("must not be null or empty");
+        assertThatThrownBy(() -> provider.wrap(new byte[0]))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("must not be null or empty");
+        }
+
+        @Test
+        void unwrap_shouldRejectNullWrappedKey() {
+        AzureKeyVaultCmkProvider provider = createProvider();
+
+        assertThatThrownBy(() -> provider.unwrap(null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("WrappedKey must not be null");
+        }
+
+        @Test
+        void getPublicReference_shouldUseUnknownWhenVersionMissing() {
+        AzureKeyVaultCmkProvider provider = new AzureKeyVaultCmkProvider(
+            rsaKeyPair.getPublic(), createDummyClient(), "RSA-OAEP-256", null);
+
+        assertThat(provider.getPublicReference()).isEqualTo("azure-keyvault:unknown-version");
+        }
+
     // ===== JsonWebKeyToPublicKey tests =====
 
     @Test
