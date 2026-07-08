@@ -5,6 +5,8 @@ import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.service.CryptoCodec;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
+import com.mongodb.client.result.UpdateResult;
+import org.bson.Document;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -150,6 +152,40 @@ class KeyVaultCorruptionTest {
 
         // Restore vault for any remaining tests
         restoreVaultKcv();
+    }
+
+    // ===== 11.10: Concurrent rotation conflict uses optimistic locking =====
+
+    @Test
+    @Order(5)
+    void staleVaultSnapshotDoesNotOverwriteRotatedVault() {
+        Query query = new Query(Criteria.where("_id").is(VAULT_ID));
+        Document staleVault = mongoTemplate.getDb().getCollection("__lcl_keyvault")
+                .find(query.getQueryObject())
+                .first();
+        assertThat(staleVault).isNotNull();
+
+        String staleActiveKid = staleVault.getString("activeKid");
+        Integer staleVersion = staleVault.getInteger("v");
+
+        keyVaultService.rotateDek(IntTestUser.class);
+
+        Document currentVault = mongoTemplate.getDb().getCollection("__lcl_keyvault")
+                .find(query.getQueryObject())
+                .first();
+        assertThat(currentVault).isNotNull();
+        assertThat(currentVault.getString("activeKid")).isNotEqualTo(staleActiveKid);
+        assertThat(currentVault.getInteger("v")).isEqualTo(staleVersion + 1);
+
+        Document staleFilter = new Document("_id", VAULT_ID)
+                .append("activeKid", staleActiveKid)
+                .append("v", staleVersion);
+
+        UpdateResult result = mongoTemplate.getDb()
+                .getCollection("__lcl_keyvault")
+                .replaceOne(staleFilter, staleVault);
+
+        assertThat(result.getMatchedCount()).isZero();
     }
 
     // ===== Helper methods =====

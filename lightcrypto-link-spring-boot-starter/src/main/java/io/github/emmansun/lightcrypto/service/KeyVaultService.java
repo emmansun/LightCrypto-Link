@@ -8,7 +8,9 @@ import io.github.emmansun.lightcrypto.model.KeyVaultDocument.KeyVersionEntry;
 import io.github.emmansun.lightcrypto.model.KeyVaultDocument.CmkInfo;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
+import com.mongodb.client.result.UpdateResult;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -30,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class KeyVaultService {
 
+    private static final String KEY_VAULT_COLLECTION = "__lcl_keyvault";
     private static final int KEY_LENGTH = 32;
     private static final String VAULT_ID_PREFIX = "lcl-dek-";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -118,6 +121,9 @@ public class KeyVaultService {
                 throw new FatalCryptoException("Vault not found for entity: " + className);
             }
 
+            String expectedActiveKid = doc.getActiveKid();
+            int expectedVersion = doc.getV();
+
             // Find current active entry and determine next version number
             int maxVersion = 0;
             for (KeyVersionEntry entry : doc.getKeys()) {
@@ -134,10 +140,10 @@ public class KeyVaultService {
 
             doc.getKeys().add(newEntry);
             doc.setActiveKid(newKid);
+            doc.setV(expectedVersion + 1);
             doc.setUpdatedAt(Instant.now());
 
-            // Persist
-            mongoTemplate.save(doc);
+            persistRotatedVault(doc, vaultId, expectedActiveKid, expectedVersion);
 
             // Reload into cache
             verifyAndLoadKeys(doc, className);
@@ -162,6 +168,24 @@ public class KeyVaultService {
     private KeyVaultDocument loadVaultDocument(String vaultId) {
         Query query = new Query(Criteria.where("_id").is(vaultId));
         return mongoTemplate.findOne(query, KeyVaultDocument.class);
+    }
+
+    private void persistRotatedVault(KeyVaultDocument doc, String vaultId, String expectedActiveKid, int expectedVersion) {
+        Document replacement = new Document();
+        mongoTemplate.getConverter().write(doc, replacement);
+
+        Document filter = new Document("_id", vaultId)
+                .append("activeKid", expectedActiveKid)
+                .append("v", expectedVersion);
+
+        UpdateResult result = mongoTemplate.getDb()
+                .getCollection(KEY_VAULT_COLLECTION)
+                .replaceOne(filter, replacement);
+
+        if (result.getMatchedCount() == 0) {
+            throw new FatalCryptoException(
+                    "Concurrent vault rotation detected for entity vault: " + vaultId + ". Please retry.");
+        }
     }
 
     private KeyVaultDocument initializeVault(String vaultId) {
