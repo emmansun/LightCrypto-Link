@@ -169,11 +169,10 @@
                         </goals>
                     </execution>
                     <execution>
-                        <id>report-aggregate</id>
+                        <id>report</id>
                         <phase>verify</phase>
-                        <inherited>false</inherited>
                         <goals>
-                            <goal>report-aggregate</goal>
+                            <goal>report</goal>
                         </goals>
                     </execution>
                 </executions>

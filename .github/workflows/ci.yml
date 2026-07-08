@@ -51,8 +51,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: jacoco-aggregate-report
-          path: target/site/jacoco-aggregate/
+          name: jacoco-module-reports
+          path: |
+            **/target/site/jacoco/
           retention-days: 14
 
       - name: Upload Coverage to Codecov
@@ -62,6 +63,6 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           token: ${{ env.CODECOV_TOKEN }}
-          files: target/site/jacoco-aggregate/jacoco.xml
+          files: **/target/site/jacoco/jacoco.xml
           disable_search: true
           fail_ci_if_error: false
