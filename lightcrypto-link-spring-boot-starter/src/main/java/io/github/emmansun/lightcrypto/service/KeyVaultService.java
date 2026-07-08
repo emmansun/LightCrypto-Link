@@ -2,12 +2,14 @@ package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.model.GeneratedKey;
 import io.github.emmansun.lightcrypto.model.KeyVaultDocument;
 import io.github.emmansun.lightcrypto.model.KeyVaultDocument.WrappedKeyInfo;
 import io.github.emmansun.lightcrypto.model.KeyVaultDocument.KeyVersionEntry;
 import io.github.emmansun.lightcrypto.model.KeyVaultDocument.CmkInfo;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
+import io.github.emmansun.lightcrypto.util.CryptoUtils;
 import com.mongodb.client.result.UpdateResult;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
@@ -15,7 +17,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,7 +36,6 @@ public class KeyVaultService {
     private static final String KEY_VAULT_COLLECTION = "__lcl_keyvault";
     private static final int KEY_LENGTH = 32;
     private static final String VAULT_ID_PREFIX = "lcl-dek-";
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final MongoTemplate mongoTemplate;
     private final CmkProvider cmkProvider;
@@ -221,13 +221,13 @@ public class KeyVaultService {
     }
 
     private KeyVersionEntry createKeyEntry(String kid) {
-        byte[] rawDek = new byte[KEY_LENGTH];
-        byte[] rawHmac = new byte[KEY_LENGTH];
-        SECURE_RANDOM.nextBytes(rawDek);
-        SECURE_RANDOM.nextBytes(rawHmac);
+        GeneratedKey dekPair = cmkProvider.generateKey(KEY_LENGTH);
+        byte[] rawDek = dekPair.rawKey();
+        WrappedKey wrappedDek = dekPair.wrappedKey();
 
-        WrappedKey wrappedDek = cmkProvider.wrap(rawDek);
-        WrappedKey wrappedHmac = cmkProvider.wrap(rawHmac);
+        GeneratedKey hmacPair = cmkProvider.generateKey(KEY_LENGTH);
+        byte[] rawHmac = hmacPair.rawKey();
+        WrappedKey wrappedHmac = hmacPair.wrappedKey();
 
         String dekKcv = cryptoCodec.computeKcv(rawDek);
         String hmacKcv = cryptoCodec.computeKcv(rawHmac);
@@ -319,8 +319,7 @@ public class KeyVaultService {
      * Generate a kid: v{version}-{8 hex chars}.
      */
     static String generateKid(int version) {
-        byte[] suffix = new byte[4];
-        SECURE_RANDOM.nextBytes(suffix);
+        byte[] suffix = CryptoUtils.generateRandomBytes(4);
         return "v" + version + "-" + HexFormat.of().formatHex(suffix);
     }
 
