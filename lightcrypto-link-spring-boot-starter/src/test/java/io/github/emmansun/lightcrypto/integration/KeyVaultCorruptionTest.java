@@ -83,9 +83,10 @@ class KeyVaultCorruptionTest {
     @Test
     @Order(2)
     void kcvMismatchThrowsFatalCryptoException() {
+                String activeKid = keyVaultService.getActiveKid(IntTestUser.class);
         // Corrupt the DEK KCV in the first key entry
-        Query query = new Query(Criteria.where("_id").is(VAULT_ID));
-        Update update = new Update().set("keys.0.dek.kcv", "00000000000000000000000000000000");
+                Query query = new Query(Criteria.where("_id").is(VAULT_ID).and("keys.kid").is(activeKid));
+                Update update = new Update().set("keys.$.dek.kcv", "00000000000000000000000000000000");
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
 
         // A new KeyVaultService should fail to verify the corrupted vault
@@ -105,9 +106,10 @@ class KeyVaultCorruptionTest {
     @Test
     @Order(3)
     void bindingMismatchThrowsFatalCryptoException() {
+                String activeKid = keyVaultService.getActiveKid(IntTestUser.class);
         // Corrupt the binding in the first key entry
-        Query query = new Query(Criteria.where("_id").is(VAULT_ID));
-        Update update = new Update().set("keys.0.binding", "0000000000000000000000000000000000000000000000000000000000000000");
+                Query query = new Query(Criteria.where("_id").is(VAULT_ID).and("keys.kid").is(activeKid));
+                Update update = new Update().set("keys.$.binding", "0000000000000000000000000000000000000000000000000000000000000000");
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
 
         // A new KeyVaultService should fail to verify the corrupted vault
@@ -135,8 +137,8 @@ class KeyVaultCorruptionTest {
         assertThat(healthyService.getDek(kid)).hasSize(32);
 
         // Corrupt the HMAC key KCV (different from DEK KCV in task 6.8)
-        Query query = new Query(Criteria.where("_id").is(VAULT_ID));
-        Update update = new Update().set("keys.0.hmk.kcv", "deadbeef000000000000000000000000");
+        Query query = new Query(Criteria.where("_id").is(VAULT_ID).and("keys.kid").is(kid));
+        Update update = new Update().set("keys.$.hmk.kcv", "deadbeef000000000000000000000000");
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
 
         // Verify corruption is detected
@@ -161,10 +163,10 @@ class KeyVaultCorruptionTest {
         String correctDekKcv = cryptoCodec.computeKcv(keyVaultService.getDek(activeKid));
         String correctHmacKcv = cryptoCodec.computeKcv(keyVaultService.getHmacKey(activeKid));
 
-        Query query = new Query(Criteria.where("_id").is(VAULT_ID));
+        Query query = new Query(Criteria.where("_id").is(VAULT_ID).and("keys.kid").is(activeKid));
         Update update = new Update()
-                .set("keys.0.dek.kcv", correctDekKcv)
-                .set("keys.0.hmk.kcv", correctHmacKcv);
+                .set("keys.$.dek.kcv", correctDekKcv)
+                .set("keys.$.hmk.kcv", correctHmacKcv);
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
     }
 
@@ -176,8 +178,8 @@ class KeyVaultCorruptionTest {
         String activeKid = keyVaultService.getActiveKid(IntTestUser.class);
         String correctBinding = cryptoCodec.computeBinding(
                 keyVaultService.getHmacKey(activeKid), keyVaultService.getDek(activeKid));
-        Query query = new Query(Criteria.where("_id").is(VAULT_ID));
-        Update update = new Update().set("keys.0.binding", correctBinding);
+                Query query = new Query(Criteria.where("_id").is(VAULT_ID).and("keys.kid").is(activeKid));
+                Update update = new Update().set("keys.$.binding", correctBinding);
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
     }
 }
