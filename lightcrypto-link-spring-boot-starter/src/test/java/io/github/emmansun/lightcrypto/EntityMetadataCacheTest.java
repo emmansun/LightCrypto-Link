@@ -1,17 +1,21 @@
 package io.github.emmansun.lightcrypto;
 
 import io.github.emmansun.lightcrypto.annotation.Encrypted;
+import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.model.PathSegmentType;
 import io.github.emmansun.lightcrypto.testmodel.TestArticle;
+import io.github.emmansun.lightcrypto.testmodel.TestCircularRefA;
 import io.github.emmansun.lightcrypto.testmodel.TestEmployee;
 import io.github.emmansun.lightcrypto.testmodel.TestPlainEntity;
 import io.github.emmansun.lightcrypto.testmodel.TestUnsupportedEntity;
 import io.github.emmansun.lightcrypto.testmodel.TestUser;
 import io.github.emmansun.lightcrypto.testmodel.TestUserWithAddresses;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithExcludedNested;
+import io.github.emmansun.lightcrypto.testmodel.TestUserWithTooDeepNesting;
 import io.github.emmansun.lightcrypto.testmodel.TestUserWithWholeAddress;
 import io.github.emmansun.lightcrypto.testmodel.TestUserWithWholeAddresses;
 import io.github.emmansun.lightcrypto.testmodel.TestWholeSimpleCollections;
@@ -50,6 +54,11 @@ class EntityMetadataCacheTest {
         List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestPlainEntity.class);
         assertThat(fields).isEmpty();
         assertThat(cache.hasEncryptedFields(TestPlainEntity.class)).isFalse();
+    }
+
+    @Test
+    void hasEncryptedFieldsReturnsTrueWhenEncryptedFieldExists() {
+        assertThat(cache.hasEncryptedFields(TestUser.class)).isTrue();
     }
 
     @Test
@@ -193,5 +202,225 @@ class EntityMetadataCacheTest {
                 .isInstanceOf(UnsupportedTypeException.class)
                 .hasMessageContaining("mode=ELEMENT")
                 .hasMessageContaining("POJO collection/map values");
+    }
+
+    @Test
+    void pojoFieldElementModeRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestPojoFieldWithElementMode.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("mode=ELEMENT")
+                .hasMessageContaining("POJO fields");
+    }
+
+    @Test
+    void circularReferenceIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestCircularRefA.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Circular reference detected");
+    }
+
+    @Test
+    void tooDeepNestingIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestUserWithTooDeepNesting.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Maximum recursion depth");
+    }
+
+    @Test
+    void dbRefFieldIsExcludedWhileOtherNestedFieldsAreScanned() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestUserWithExcludedNested.class);
+
+        assertThat(fields).hasSize(2);
+        assertThat(fields.stream().map(EncryptedFieldMetadata::bsonFieldName).toList())
+                .containsExactly("addresses.zipCode", "addressMap.zipCode");
+
+        EncryptedFieldMetadata listMeta = fields.stream()
+                .filter(f -> "addresses.zipCode".equals(f.bsonFieldName()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(listMeta.pathTypes()).containsExactly(PathSegmentType.LIST_ITER, PathSegmentType.FIELD);
+
+        EncryptedFieldMetadata mapMeta = fields.stream()
+                .filter(f -> "addressMap.zipCode".equals(f.bsonFieldName()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(mapMeta.pathTypes()).containsExactly(PathSegmentType.MAP_ITER, PathSegmentType.FIELD);
+    }
+
+    @Test
+    void returnedEncryptedFieldsListIsImmutable() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestUser.class);
+
+        assertThatThrownBy(() -> fields.add(null))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void rawCollectionFieldWithoutGenericTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestRawCollectionWithoutGeneric.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("must declare a generic element type");
+    }
+
+    @Test
+    void rawMapFieldWithoutGenericTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestRawMapWithoutGeneric.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("must declare generic key/value types");
+    }
+
+    @Test
+    void mapWithNonStringKeyTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestMapWithNonStringKey.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("must use String keys");
+    }
+
+    @Test
+    void scalarWholeModeFallsBackToFieldLevelEncryption() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestScalarWholeMode.class);
+
+        assertThat(fields).hasSize(1);
+        EncryptedFieldMetadata meta = fields.get(0);
+        assertThat(meta.wholeObject()).isFalse();
+        assertThat(meta.pathTypes()).containsExactly(PathSegmentType.FIELD);
+    }
+
+    @Test
+    void customFieldNameIsUsedForBlindIndexFieldName() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestCustomFieldNameEntity.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).blindIndexFieldName()).isEqualTo("phone_cipher");
+    }
+
+    @Test
+    void transientEncryptedFieldIsExcluded() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWithTransientEncryptedField.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    @Test
+    void collectionWithUnsupportedElementTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestCollectionWithUnsupportedElementType.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("unsupported collection element type");
+    }
+
+    @Test
+    void mapWithUnsupportedValueTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestMapWithUnsupportedValueType.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("unsupported map value type");
+    }
+
+    @Test
+    void collectionWithParameterizedElementTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestCollectionWithParameterizedElementType.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("unsupported collection element type");
+    }
+
+    @Test
+    void defaultAlgorithmComesFromCryptoProperties() {
+        CryptoProperties props = new CryptoProperties();
+        props.setAlgorithm(SymmetricAlgorithm.SM4_GCM);
+        EntityMetadataCache customCache = new EntityMetadataCache(props);
+
+        List<EncryptedFieldMetadata> fields = customCache.getEncryptedFields(TestUser.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).algorithm()).isEqualTo(SymmetricAlgorithm.SM4_GCM);
+    }
+
+    @Test
+    void explicitAlgorithmOverridesGlobalDefault() {
+        CryptoProperties props = new CryptoProperties();
+        props.setAlgorithm(SymmetricAlgorithm.SM4_GCM);
+        EntityMetadataCache customCache = new EntityMetadataCache(props);
+
+        List<EncryptedFieldMetadata> fields = customCache.getEncryptedFields(TestExplicitAlgorithmEntity.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).algorithm()).isEqualTo(SymmetricAlgorithm.AES_256_CBC);
+    }
+
+    @Test
+    void inheritedEncryptedFieldIsDiscovered() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestInheritedEncryptedEntity.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestPojoFieldWithElementMode {
+        @Encrypted(mode = io.github.emmansun.lightcrypto.annotation.EncryptionMode.ELEMENT)
+        private TestUserWithWholeAddress.Address address;
+    }
+
+    @SuppressWarnings("rawtypes")
+    static class TestRawCollectionWithoutGeneric {
+        @Encrypted
+        private List tags;
+    }
+
+    @SuppressWarnings("rawtypes")
+    static class TestRawMapWithoutGeneric {
+        @Encrypted
+        private java.util.Map settings;
+    }
+
+    static class TestMapWithNonStringKey {
+        @Encrypted
+        private java.util.Map<Integer, String> settings;
+    }
+
+    static class TestScalarWholeMode {
+        @Encrypted(mode = io.github.emmansun.lightcrypto.annotation.EncryptionMode.WHOLE)
+        private String phone;
+    }
+
+    static class TestCustomFieldNameEntity {
+        @Encrypted(fieldName = "phone_cipher")
+        private String phone;
+    }
+
+    static class TestWithTransientEncryptedField {
+        @org.springframework.data.annotation.Transient
+        @Encrypted
+        private String ignored;
+
+        @Encrypted
+        private String phone;
+    }
+
+    static class TestCollectionWithUnsupportedElementType {
+        @Encrypted
+        private List<Object> values;
+    }
+
+    static class TestMapWithUnsupportedValueType {
+        @Encrypted
+        private java.util.Map<String, Object> values;
+    }
+
+    static class TestCollectionWithParameterizedElementType {
+        @Encrypted
+        private List<List<String>> values;
+    }
+
+    static class TestExplicitAlgorithmEntity {
+        @Encrypted(algorithm = SymmetricAlgorithm.AES_256_CBC)
+        private String phone;
+    }
+
+    static class TestBaseEncryptedEntity {
+        @Encrypted
+        private String phone;
+    }
+
+    static class TestInheritedEncryptedEntity extends TestBaseEncryptedEntity {
     }
 }

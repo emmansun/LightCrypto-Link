@@ -1,8 +1,10 @@
 package io.github.emmansun.lightcrypto;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
+import io.github.emmansun.lightcrypto.exception.DecryptionException;
 import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.exception.KeyManagementException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.service.CryptoCodec;
 import io.github.emmansun.lightcrypto.service.FieldCryptoService;
@@ -26,6 +28,7 @@ import org.bson.types.Binary;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -383,6 +386,140 @@ class FieldCryptoServiceTest extends LclTestBase {
         assertThat((List<Object>) doc.get("tags")).containsExactly("java", "spring");
         assertThat(doc.get("settings")).isInstanceOf(Document.class);
         assertThat(((Document) doc.get("settings")).getString("theme")).isEqualTo("dark");
+    }
+
+    @Test
+    void unsupportedAlgorithmThrowsDecryptionException() {
+        byte[] enc = codec.encrypt(TEST_DEK, "hello".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        Document doc = new Document();
+        doc.put("phone", buildSubDoc(enc, "STR", TEST_KID, "INVALID"));
+
+        assertThatThrownBy(() -> fieldCryptoService.decryptDocument(doc, TestUser.class))
+                .isInstanceOf(DecryptionException.class)
+                .hasMessageContaining("Unsupported algorithm");
+    }
+
+    @Test
+    void keyVaultFailureIsWrappedAndShortKidIsMasked() {
+        KeyVaultService failingVault = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY) {
+            @Override
+            public byte[] getDek(String kid) {
+                throw new FatalCryptoException("fail");
+            }
+        };
+        fieldCryptoService = new FieldCryptoService(new EntityMetadataCache(new CryptoProperties()), codec, createTestTypeDeserializer(), failingVault);
+        byte[] enc = codec.encrypt(TEST_DEK, "hello".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        Document doc = new Document("phone", buildSubDoc(enc, "STR", "abc", "AES_256_GCM"));
+
+        assertThatThrownBy(() -> fieldCryptoService.decryptDocument(doc, TestUser.class))
+                .isInstanceOf(KeyManagementException.class)
+                .hasMessageContaining("kid=****");
+    }
+
+    @Test
+    void decryptFailureIsWrappedAsDecryptionException() {
+        CryptoCodec failingCodec = new CryptoCodec() {
+            @Override
+            public byte[] decrypt(byte[] dek, byte[] data, SymmetricAlgorithm algorithm) {
+                throw new IllegalStateException("boom");
+            }
+        };
+        fieldCryptoService = new FieldCryptoService(
+                new EntityMetadataCache(new CryptoProperties()),
+                failingCodec,
+                createTestTypeDeserializer(),
+                new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY)
+        );
+        byte[] enc = codec.encrypt(TEST_DEK, "hello".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        Document doc = new Document("phone", buildSubDoc(enc, "STR", TEST_KID, "AES_256_GCM"));
+
+        assertThatThrownBy(() -> fieldCryptoService.decryptDocument(doc, TestUser.class))
+                .isInstanceOf(DecryptionException.class)
+                .hasMessageContaining("Failed to decrypt field 'phone'");
+    }
+
+    @Test
+    void deserializeFailureIsWrappedAsDecryptionException() {
+        byte[] enc = codec.encrypt(TEST_DEK, "not-an-int".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        Document doc = new Document("age", buildSubDoc(enc, "INT", TEST_KID, "AES_256_GCM"));
+
+        assertThatThrownBy(() -> fieldCryptoService.decryptDocument(doc, TestEmployee.class))
+                .isInstanceOf(DecryptionException.class)
+                .hasMessageContaining("Failed to deserialize field 'age'");
+    }
+
+    @Test
+    void structuredPayloadDecodeFailureIsWrapped() {
+        byte[] enc = codec.encrypt(TEST_DEK, "not-bson".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        Document doc = new Document("address", buildSubDoc(enc, "DOC", TEST_KID, "AES_256_GCM"));
+
+        assertThatThrownBy(() -> fieldCryptoService.decryptDocument(doc, TestUserWithWholeAddress.class))
+                .isInstanceOf(DecryptionException.class)
+                .hasMessageContaining("Failed to decode structured payload");
+    }
+
+    @Test
+    void decodeStructuredValueUnknownTypeThrowsViaReflection() throws Exception {
+        Method method = FieldCryptoService.class.getDeclaredMethod("decodeStructuredValue", String.class, byte[].class);
+        method.setAccessible(true);
+        byte[] payload = encodePayload(new Document("k", "v"));
+
+        assertThatThrownBy(() -> method.invoke(fieldCryptoService, "UNKNOWN", payload))
+                .hasCauseInstanceOf(DecryptionException.class)
+                .hasRootCauseMessage("Unsupported structured type marker: UNKNOWN");
+    }
+
+    @Test
+    void malformedEncryptedFieldSubDocumentIsLeftUntouched() {
+        Document malformed = new Document("_e", 1)
+                .append("_t", "STR")
+                .append("_k", TEST_KID);
+        Document doc = new Document("phone", malformed);
+
+        fieldCryptoService.decryptDocument(doc, TestUser.class);
+
+        assertThat(doc.get("phone")).isSameAs(malformed);
+    }
+
+    @Test
+    void malformedEncryptedListElementIsLeftUntouched() {
+        Document malformed = new Document("_e", 1)
+                .append("_t", "STR")
+                .append("_k", TEST_KID);
+        Document doc = new Document("tags", new ArrayList<>(List.of(malformed)));
+
+        fieldCryptoService.decryptDocument(doc, TestArticle.class);
+
+        assertThat(((List<?>) doc.get("tags")).get(0)).isSameAs(malformed);
+    }
+
+    @Test
+    void malformedEncryptedMapEntryIsLeftUntouched() {
+        Document malformed = new Document("_e", 1)
+                .append("_t", "STR")
+                .append("_k", TEST_KID);
+        Document doc = new Document("settings", new Document("theme", malformed));
+
+        fieldCryptoService.decryptDocument(doc, TestArticle.class);
+
+        assertThat(((Document) doc.get("settings")).get("theme")).isSameAs(malformed);
+    }
+
+    @Test
+    void keyVaultFailureWithEmptyKidUsesNaMask() {
+        KeyVaultService failingVault = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY) {
+            @Override
+            public byte[] getDek(String kid) {
+                throw new FatalCryptoException("fail");
+            }
+        };
+        fieldCryptoService = new FieldCryptoService(new EntityMetadataCache(new CryptoProperties()), codec, createTestTypeDeserializer(), failingVault);
+        byte[] enc = codec.encrypt(TEST_DEK, "hello".getBytes(StandardCharsets.UTF_8), SymmetricAlgorithm.AES_256_GCM);
+        Document doc = new Document("phone", buildSubDoc(enc, "STR", "", "AES_256_GCM"));
+
+        assertThatThrownBy(() -> fieldCryptoService.decryptDocument(doc, TestUser.class))
+                .isInstanceOf(KeyManagementException.class)
+                .hasMessageContaining("kid=N/A");
     }
 
     // --- 4.13 is run separately ---

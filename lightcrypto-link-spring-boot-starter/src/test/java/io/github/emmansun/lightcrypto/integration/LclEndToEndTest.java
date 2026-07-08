@@ -1,5 +1,6 @@
 package io.github.emmansun.lightcrypto.integration;
 
+import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import org.bson.Document;
 import org.junit.jupiter.api.*;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -103,6 +105,47 @@ class LclEndToEndTest {
         assertThat(keyVaultService.getDek(activeKid)).hasSize(32);
         assertThat(keyVaultService.getHmacKey(activeKid)).hasSize(32);
     }
+
+        @Test
+        @Order(3)
+        void rotateDekAddsNewActiveVersionAndMarksOldAsRotated() {
+        keyVaultService.ensureVaultInitialized(IntTestUser.class);
+        String oldKid = keyVaultService.getActiveKid(IntTestUser.class);
+        byte[] oldDek = keyVaultService.getDek(oldKid);
+        byte[] oldHmac = keyVaultService.getHmacKey(oldKid);
+
+        keyVaultService.rotateDek(IntTestUser.class);
+
+        String newKid = keyVaultService.getActiveKid(IntTestUser.class);
+        assertThat(newKid).isNotEqualTo(oldKid);
+        assertThat(Pattern.matches("^v2-[0-9a-f]{8}$", newKid)).isTrue();
+        assertThat(keyVaultService.getDek(newKid)).hasSize(32);
+        assertThat(keyVaultService.getHmacKey(newKid)).hasSize(32);
+
+        // Old key versions are still retrievable for historical data decryption
+        assertThat(keyVaultService.getDek(oldKid)).isEqualTo(oldDek);
+        assertThat(keyVaultService.getHmacKey(oldKid)).isEqualTo(oldHmac);
+
+        Document vaultDoc = mongoTemplate.getDb().getCollection("__lcl_keyvault")
+            .find(new Document("_id", "lcl-dek-IntTestUser")).first();
+        assertThat(vaultDoc).isNotNull();
+        assertThat(vaultDoc.getString("activeKid")).isEqualTo(newKid);
+
+        List<Document> keys = vaultDoc.getList("keys", Document.class);
+        assertThat(keys).hasSize(2);
+        assertThat(keys.stream().anyMatch(k -> oldKid.equals(k.getString("kid")) && "ROTATED".equals(k.getString("status"))))
+            .isTrue();
+        assertThat(keys.stream().anyMatch(k -> newKid.equals(k.getString("kid")) && "ACTIVE".equals(k.getString("status"))))
+            .isTrue();
+        }
+
+        @Test
+        @Order(4)
+        void rotateDekThrowsWhenVaultDoesNotExist() {
+        assertThatThrownBy(() -> keyVaultService.rotateDek(IntTestEmployee.class))
+            .isInstanceOf(FatalCryptoException.class)
+            .hasMessageContaining("Vault not found for entity: IntTestEmployee");
+        }
 
     // ===== 11.1: Save and read back String with blindIndex =====
 
