@@ -1,6 +1,8 @@
 package io.github.emmansun.lightcrypto.provider.azure;
 
 import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.azure.security.keyvault.keys.KeyClient;
+import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
 import com.azure.security.keyvault.keys.models.JsonWebKey;
@@ -66,9 +68,9 @@ class AzureKeyVaultCmkProviderTest {
     }
 
     @Test
-    void getPublicReference_shouldContainProviderAndVersion() {
+    void getPublicReference_shouldSameAsKeyName() {
         AzureKeyVaultCmkProvider provider = createProvider();
-        assertThat(provider.getPublicReference()).isEqualTo("azure-keyvault:test-version");
+        assertThat(provider.getPublicReference()).isEqualTo("test-name");
     }
 
     @Test
@@ -79,17 +81,17 @@ class AzureKeyVaultCmkProviderTest {
 
     @Test
     void constructor_shouldRejectNullPublicKey() {
-        CryptographyClient dummyClient = createDummyClient();
-        assertThatThrownBy(() -> new AzureKeyVaultCmkProvider(null, dummyClient, "RSA-OAEP-256", "v1"))
+        KeyClient dummyClient = createDummyClient();
+        assertThatThrownBy(() -> new AzureKeyVaultCmkProvider(null, dummyClient, "RSA-OAEP-256", "keyName", "v1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("publicKey must not be null");
     }
 
     @Test
-    void constructor_shouldRejectNullCryptoClient() {
-        assertThatThrownBy(() -> new AzureKeyVaultCmkProvider(rsaKeyPair.getPublic(), null, "RSA-OAEP-256", "v1"))
+    void constructor_shouldRejectNullKeyClient() {
+        assertThatThrownBy(() -> new AzureKeyVaultCmkProvider(rsaKeyPair.getPublic(), null, "RSA-OAEP-256", "keyName", "v1"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("cryptoClient must not be null");
+                .hasMessageContaining("keyClient must not be null");
     }
 
         @Test
@@ -111,14 +113,6 @@ class AzureKeyVaultCmkProviderTest {
         assertThatThrownBy(() -> provider.unwrap(null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("WrappedKey must not be null");
-        }
-
-        @Test
-        void getPublicReference_shouldUseUnknownWhenVersionMissing() {
-        AzureKeyVaultCmkProvider provider = new AzureKeyVaultCmkProvider(
-            rsaKeyPair.getPublic(), createDummyClient(), "RSA-OAEP-256", null);
-
-        assertThat(provider.getPublicReference()).isEqualTo("azure-keyvault:unknown-version");
         }
 
     // ===== JsonWebKeyToPublicKey tests =====
@@ -192,13 +186,13 @@ class AzureKeyVaultCmkProviderTest {
     // ===== Helper methods =====
 
     private AzureKeyVaultCmkProvider createProvider() {
-        CryptographyClient dummyClient = createDummyClient();
-        return new AzureKeyVaultCmkProvider(rsaKeyPair.getPublic(), dummyClient, "RSA-OAEP-256", "test-version");
+        KeyClient dummyClient = createDummyClient();
+        return new AzureKeyVaultCmkProvider(rsaKeyPair.getPublic(), dummyClient, "RSA-OAEP-256", "test-name", "test-version");
     }
 
-    private CryptographyClient createDummyClient() {
-        return new CryptographyClientBuilder()
-                .keyIdentifier("https://dummy.vault.azure.net/keys/dummy-key/dummy-version")
+    private KeyClient createDummyClient() {
+        return new KeyClientBuilder()
+                .vaultUrl("https://dummy.vault.azure.net/")
                 .credential(new DefaultAzureCredentialBuilder().build())
                 .buildClient();
     }

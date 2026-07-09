@@ -1,6 +1,8 @@
 package io.github.emmansun.lightcrypto.provider.azure;
 
 import com.azure.identity.ClientSecretCredentialBuilder;
+import com.azure.security.keyvault.keys.KeyClient;
+import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
@@ -38,21 +40,17 @@ class AzureKeyVaultCmkProviderRsaIntegrationTest {
                 .clientId(clientId)
                 .clientSecret(clientSecret);
 
-        String keyIdentifier = vaultUri.endsWith("/")
-                ? vaultUri + "keys/" + keyName
-                : vaultUri + "/keys/" + keyName;
-
-        CryptographyClient cryptoClient = new CryptographyClientBuilder()
-                .keyIdentifier(keyIdentifier)
+        KeyClient keyClient = new KeyClientBuilder()
+                .vaultUrl(vaultUri)
                 .credential(credentialBuilder.build())
                 .buildClient();
 
         // Get key version and public key from Azure Key Vault
-        KeyVaultKey vaultKey = cryptoClient.getKey();
+        KeyVaultKey vaultKey = keyClient.getKey(keyName);
         keyVersion = vaultKey.getProperties().getVersion();
         PublicKey publicKey = JsonWebKeyToPublicKey.convert(vaultKey.getKey());
 
-        provider = new AzureKeyVaultCmkProvider(publicKey, cryptoClient, "RSA-OAEP-256", keyVersion);
+        provider = new AzureKeyVaultCmkProvider(publicKey, keyClient, "RSA-OAEP-256", keyName, keyVersion);
     }
 
     @Test

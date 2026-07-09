@@ -3,8 +3,8 @@ package io.github.emmansun.lightcrypto.provider.azure;
 import com.azure.core.credential.TokenCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
-import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
-import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
+import com.azure.security.keyvault.keys.KeyClient;
+import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +16,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 import java.security.PublicKey;
+import java.time.Duration;
 
 /**
  * Auto-configuration for Azure Key Vault CMK provider.
@@ -38,24 +39,27 @@ public class AzureKeyVaultCmkAutoConfiguration {
 
     private static final String ALGORITHM_RSA = "RSA-OAEP-256";
 
+    private static final int TOKEN_MAX_RETRY_COUNT = 3;
+
+    private static final long TOKEN_MAX_RETRY_TIMEOUT = 10L;
+
     @Bean
     @ConditionalOnMissingBean(CmkProvider.class)
     public CmkProvider cmkProvider(AzureKeyVaultCmkProperties properties) {
         validateProperties(properties);
 
         TokenCredential credential = buildTokenCredential(properties);
-        CryptographyClient cryptoClient = buildCryptographyClient(properties, credential);
+        KeyClient keyClient = buildKeyClient(properties, credential);
 
-        // Always call getKey() to resolve key version (and optionally public key)
-        KeyVaultKey vaultKey = cryptoClient.getKey();
-        String keyVersion = vaultKey.getProperties().getVersion();
+        KeyVaultKey key = keyClient.getKey(properties.getKeyName());
+        String keyVersion = key.getProperties().getVersion();
 
-        PublicKey publicKey = resolvePublicKey(properties, vaultKey);
+        PublicKey publicKey = resolvePublicKey(properties, key);
 
         log.info("Azure Key Vault CMK provider initialized: vaultUri={}, keyName={}, keyVersion={}, algorithm={}",
                 properties.getVaultUri(), properties.getKeyName(), keyVersion, properties.getAlgorithm());
 
-        return new AzureKeyVaultCmkProvider(publicKey, cryptoClient, ALGORITHM_RSA, keyVersion);
+        return new AzureKeyVaultCmkProvider(publicKey, keyClient, ALGORITHM_RSA, properties.getKeyName(), keyVersion);
     }
 
     private void validateProperties(AzureKeyVaultCmkProperties properties) {
@@ -95,20 +99,19 @@ public class AzureKeyVaultCmkAutoConfiguration {
                     .tenantId(properties.getTenantId())
                     .clientId(properties.getClientId())
                     .clientSecret(properties.getClientSecret())
+                    .maxRetry(TOKEN_MAX_RETRY_COUNT)
+                    .retryTimeout(d -> Duration.ofSeconds(TOKEN_MAX_RETRY_TIMEOUT))
                     .build();
         }
         log.info("Using DefaultAzureCredential (managed identity / Azure CLI / environment)");
         return new DefaultAzureCredentialBuilder().build();
     }
 
-    private CryptographyClient buildCryptographyClient(AzureKeyVaultCmkProperties properties,
+    private KeyClient buildKeyClient(AzureKeyVaultCmkProperties properties,
                                                         TokenCredential credential) {
         try {
-            String keyIdentifier = properties.getVaultUri().endsWith("/")
-                    ? properties.getVaultUri() + "keys/" + properties.getKeyName()
-                    : properties.getVaultUri() + "/keys/" + properties.getKeyName();
-            return new CryptographyClientBuilder()
-                    .keyIdentifier(keyIdentifier)
+            return new KeyClientBuilder()
+                    .vaultUrl(properties.getVaultUri())
                     .credential(credential)
                     .buildClient();
         } catch (Exception e) {

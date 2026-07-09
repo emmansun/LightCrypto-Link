@@ -25,7 +25,7 @@ class AlibabaKmsCmkAutoConfigurationTest {
 
         assertThat(cmkProvider).isInstanceOf(AlibabaKmsCmkProvider.class);
         assertThat(cmkProvider.getProviderId()).isEqualTo("alibaba-kms");
-        assertThat(cmkProvider.getPublicReference()).isEqualTo("kms-key-1:v-test");
+        assertThat(cmkProvider.getPublicReference()).isEqualTo("kms-key-1");
     }
 
     @Test

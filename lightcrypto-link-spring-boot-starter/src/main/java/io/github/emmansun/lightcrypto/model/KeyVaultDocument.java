@@ -66,6 +66,7 @@ public class KeyVaultDocument {
         private byte[] wrapped;
         private String algorithm;
         private String kcv;
+        private String cmkVersion; // optional, for CMK version tracking
     }
 
     @Data

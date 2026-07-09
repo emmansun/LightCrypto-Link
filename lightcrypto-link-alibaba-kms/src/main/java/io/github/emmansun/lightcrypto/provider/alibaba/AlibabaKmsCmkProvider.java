@@ -119,10 +119,7 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     @Override
     public String getPublicReference() {
-        if (keyVersionId == null || keyVersionId.isBlank()) {
-            return keyId;
-        }
-        return keyId + ":" + keyVersionId;
+        return keyId;
     }
 
     @Override
@@ -158,7 +155,7 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
             byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
             byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
 
-            return new GeneratedKey(plaintext, new WrappedKey(ciphertext, KMS_DATA_KEY));
+            return new GeneratedKey(plaintext, new WrappedKey(ciphertext, KMS_DATA_KEY, Map.of("keyVersionId", response.getBody().getKeyVersionId())));
         } catch (Exception e) {
             throw new CryptoException("KMS GenerateDataKey failed for keyId=" + keyId, e);
         }
@@ -218,10 +215,12 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
                             .setKeyId(keyId)
                             .setCiphertextBlob(ciphertextBlob)
                             .setAlgorithm(kmsAlgorithm);
-            if (keyVersionId != null) {
-                request.setKeyVersionId(keyVersionId);
-            }
-
+            String cmkVersion = wrappedKey.metadata().get(CmkProvider.META_CMK_VERSION);
+            if (cmkVersion == null || cmkVersion.isEmpty()) {
+                cmkVersion = keyVersionId; // fallback to provider's key version if not present in metadata
+            }                            
+            request.setKeyVersionId(cmkVersion);
+            
             com.aliyun.kms20160120.models.AsymmetricDecryptResponse response =
                     kmsClient.asymmetricDecrypt(request);
             String plaintextBase64 = response.getBody().getPlaintext();
@@ -236,7 +235,7 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
             Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding");
             cipher.init(Cipher.ENCRYPT_MODE, publicKey, RSA_OAEP_SPEC);
             byte[] ciphertext = cipher.doFinal(plaintextKey);
-            return new WrappedKey(ciphertext, ALGORITHM_RSA_OAEP_SHA256);
+            return new WrappedKey(ciphertext, ALGORITHM_RSA_OAEP_SHA256, Map.of(CmkProvider.META_CMK_VERSION, keyVersionId));
         } catch (Exception e) {
             throw new CryptoException("RSA-OAEP wrap failed", e);
         }

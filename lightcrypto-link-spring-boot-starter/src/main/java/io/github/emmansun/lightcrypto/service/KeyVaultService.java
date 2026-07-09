@@ -236,11 +236,13 @@ public class KeyVaultService {
         WrappedKeyInfo dekInfo = new WrappedKeyInfo();
         dekInfo.setWrapped(wrappedDek.ciphertext());
         dekInfo.setAlgorithm(wrappedDek.algorithm());
+        dekInfo.setCmkVersion(wrappedDek.metadata().get(CmkProvider.META_CMK_VERSION));
         dekInfo.setKcv(dekKcv);
 
         WrappedKeyInfo hmacInfo = new WrappedKeyInfo();
         hmacInfo.setWrapped(wrappedHmac.ciphertext());
         hmacInfo.setAlgorithm(wrappedHmac.algorithm());
+        hmacInfo.setCmkVersion(wrappedHmac.metadata().get(CmkProvider.META_CMK_VERSION));
         hmacInfo.setKcv(hmacKcv);
 
         KeyVersionEntry entry = new KeyVersionEntry();
@@ -265,10 +267,13 @@ public class KeyVaultService {
             int activeCount = 0;
 
             for (KeyVersionEntry entry : doc.getKeys()) {
+                String dekCmkVersion = entry.getDek().getCmkVersion();
                 byte[] unwrappedDek = cmkProvider.unwrap(
-                        new WrappedKey(entry.getDek().getWrapped(), entry.getDek().getAlgorithm()));
+                        (dekCmkVersion == null || dekCmkVersion.isEmpty()) ? new WrappedKey(entry.getDek().getWrapped(), entry.getDek().getAlgorithm()) : new WrappedKey(entry.getDek().getWrapped(), entry.getDek().getAlgorithm(), Map.of(CmkProvider.META_CMK_VERSION, dekCmkVersion)));
+
+                String hmacCmkVersion = entry.getHmk().getCmkVersion();
                 byte[] unwrappedHmac = cmkProvider.unwrap(
-                        new WrappedKey(entry.getHmk().getWrapped(), entry.getHmk().getAlgorithm()));
+                        (hmacCmkVersion == null || hmacCmkVersion.isEmpty()) ? new WrappedKey(entry.getHmk().getWrapped(), entry.getHmk().getAlgorithm()) : new WrappedKey(entry.getHmk().getWrapped(), entry.getHmk().getAlgorithm(), Map.of(CmkProvider.META_CMK_VERSION, hmacCmkVersion)));
 
                 // KCV verification
                 String expectedDekKcv = cryptoCodec.computeKcv(unwrappedDek);

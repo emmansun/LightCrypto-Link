@@ -8,6 +8,7 @@ import io.github.emmansun.lightcrypto.util.CryptoUtils;
  * CMK Provider SPI — wraps and unwraps data keys (for example DEK) with a CMK.
  */
 public interface CmkProvider {
+    String META_CMK_VERSION = "cmkVersion";
 
     /**
      * Get the unique provider identifier.

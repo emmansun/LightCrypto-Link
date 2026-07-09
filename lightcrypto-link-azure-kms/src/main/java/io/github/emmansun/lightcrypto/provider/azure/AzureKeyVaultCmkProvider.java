@@ -1,5 +1,6 @@
 package io.github.emmansun.lightcrypto.provider.azure;
 
+import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.cryptography.models.KeyWrapAlgorithm;
 import com.azure.security.keyvault.keys.cryptography.models.UnwrapResult;
@@ -12,6 +13,7 @@ import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 import java.security.PublicKey;
 import java.security.spec.MGF1ParameterSpec;
+import java.util.Map;
 
 /**
  * CMK Provider backed by Azure Key Vault using asymmetric RSA-OAEP-256.
@@ -19,33 +21,37 @@ import java.security.spec.MGF1ParameterSpec;
  * Local wrap uses RSA-OAEP with SHA-256 (public key), remote unwrap calls Azure Key Vault API.
  */
 public final class AzureKeyVaultCmkProvider implements CmkProvider {
+    private static final String PROVIDER_ID = "azure-keyvault";
 
     private final PublicKey publicKey;
-    private final CryptographyClient cryptoClient;
+    private final KeyClient keyClient;
     private final String algorithm;
+    private final String keyName;
     private final String keyVersion;
 
     /**
      * Constructs a new Azure Key Vault asymmetric CMK provider.
      *
      * @param publicKey    RSA public key for local wrap (from PEM or auto-fetched via getKey())
-     * @param cryptoClient Azure Key Vault CryptographyClient for unwrap
+     * @param keyClient Azure Key Vault KeyClient for unwrap
      * @param algorithm    wrap algorithm identifier (e.g. "RSA-OAEP-256")
      * @param keyVersion   key version auto-resolved from getKey()
      */
     public AzureKeyVaultCmkProvider(PublicKey publicKey,
-                                    CryptographyClient cryptoClient,
+                                    KeyClient keyClient,
                                     String algorithm,
+                                    String keyName,
                                     String keyVersion) {
         if (publicKey == null) {
             throw new IllegalArgumentException("publicKey must not be null");
         }
-        if (cryptoClient == null) {
-            throw new IllegalArgumentException("cryptoClient must not be null");
+        if (keyClient == null) {
+            throw new IllegalArgumentException("keyClient must not be null");
         }
         this.publicKey = publicKey;
-        this.cryptoClient = cryptoClient;
+        this.keyClient = keyClient;
         this.algorithm = algorithm;
+        this.keyName = keyName;
         this.keyVersion = keyVersion;
     }
 
@@ -60,7 +66,7 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
                     "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
             cipher.init(Cipher.WRAP_MODE, publicKey, oaepParams);
             byte[] ciphertext = cipher.wrap(new javax.crypto.spec.SecretKeySpec(key, "AES"));
-            return new WrappedKey(ciphertext, algorithm);
+            return new WrappedKey(ciphertext, algorithm, Map.of(CmkProvider.META_CMK_VERSION, keyVersion));
         } catch (Exception e) {
             throw new CryptoException("Failed to wrap key with RSA-OAEP-256", e);
         }
@@ -72,6 +78,11 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
             throw new IllegalArgumentException("WrappedKey must not be null");
         }
         try {
+            String cmkVersion = wrappedKey.metadata().get(CmkProvider.META_CMK_VERSION);
+            if (cmkVersion == null || cmkVersion.isEmpty()) {
+                cmkVersion = keyVersion; // fallback to provider's key version if not present in metadata
+            }
+            CryptographyClient cryptoClient = this.keyClient.getCryptographyClient(keyName, cmkVersion);
             UnwrapResult result = cryptoClient.unwrapKey(KeyWrapAlgorithm.RSA_OAEP_256, wrappedKey.ciphertext());
             return result.getKey();
         } catch (Exception e) {
@@ -81,12 +92,12 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
 
     @Override
     public String getProviderId() {
-        return "azure-keyvault";
+        return PROVIDER_ID;
     }
 
     @Override
     public String getPublicReference() {
-        return "azure-keyvault:" + (keyVersion == null ? "unknown-version" : keyVersion);
+        return keyName;
     }
 
     /** Returns the auto-resolved key version. */
