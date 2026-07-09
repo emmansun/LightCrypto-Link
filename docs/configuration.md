@@ -60,6 +60,7 @@ lcl:
       key-id: ${ALIBABA_KMS_KEY_ID}
       access-key-id: ${ALIBABA_AK_ID}
       access-key-secret: ${ALIBABA_AK_SECRET}
+      # mode: SYMMETRIC | ASYMMETRIC, default is ASYMMETRIC  
       # key-version-id: optional
       # public-key: optional PEM
 ```
