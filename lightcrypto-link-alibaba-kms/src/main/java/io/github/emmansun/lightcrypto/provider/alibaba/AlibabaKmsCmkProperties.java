@@ -1,6 +1,7 @@
 package io.github.emmansun.lightcrypto.provider.alibaba;
 
 import lombok.Data;
+import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -41,4 +42,24 @@ public class AlibabaKmsCmkProperties {
      * The key type (RSA or EC/SM2) is auto-detected from the key material.
      */
     private String publicKey;
+
+    /**
+     * CMK Operation Mode.
+     * ASYMMETRIC: Uses RSA/EC key for wrap/unwrap (requires publicKey/keyVersionId).
+     * SYMMETRIC: Uses GenerateDataKey/Decrypt (requires symmetric.* config).
+     * Default is ASYMMETRIC to maintain backward compatibility.
+     */
+    private Mode mode = Mode.ASYMMETRIC;
+
+    /**
+     * Optional Encryption Context for GenerateDataKey and Decrypt operations.
+     * A map of key-value pairs that can be used to track the source of the data key.
+     * See Alibaba Cloud KMS documentation for details on Encryption Context.
+     */
+    private Map<String, String> encryptionContext;
+
+    public enum Mode {
+        ASYMMETRIC,
+        SYMMETRIC
+    }
 }

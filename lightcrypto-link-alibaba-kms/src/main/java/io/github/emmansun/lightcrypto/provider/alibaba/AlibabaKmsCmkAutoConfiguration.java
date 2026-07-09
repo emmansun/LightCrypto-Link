@@ -38,20 +38,13 @@ public class AlibabaKmsCmkAutoConfiguration {
 
         com.aliyun.kms20160120.Client kmsClient = buildKmsClient(properties);
 
-        // Step 1: Resolve keyVersionId via ListKeyVersions
-        String keyVersionId = resolveKeyVersionId(properties, kmsClient);
-
-        // Step 2: Load/fetch public key for local wrap (algorithm auto-detected)
-        PublicKey publicKey = resolvePublicKey(properties, kmsClient, keyVersionId);
-
-        log.info("Alibaba KMS CMK provider initialized: keyId={}, keyVersionId={}, keyType={}",
-                properties.getKeyId(), keyVersionId, publicKey.getAlgorithm());
-
-        return new AlibabaKmsCmkProvider(
-                properties.getKeyId(),
-                keyVersionId,
-                publicKey,
-                kmsClient);
+        if (properties.getMode() == AlibabaKmsCmkProperties.Mode.SYMMETRIC) {
+            log.info("Alibaba KMS CMK provider initialized in SYMMETRIC mode: keyId={}", properties.getKeyId());
+            return createSymmetricProvider(properties, kmsClient);
+        } else {
+            log.info("Alibaba KMS CMK provider initialized in ASYMMETRIC mode: keyId={}", properties.getKeyId());
+            return createAsymmetricProvider(properties, kmsClient);
+        }
     }
 
     private void validateProperties(AlibabaKmsCmkProperties properties) {
@@ -80,6 +73,38 @@ public class AlibabaKmsCmkAutoConfiguration {
             throw new IllegalArgumentException(
                     "Failed to create Alibaba Cloud KMS client: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Creates a provider for Asymmetric (RSA/SM2) keys.
+     */
+    private CmkProvider createAsymmetricProvider(AlibabaKmsCmkProperties properties,
+                                                 com.aliyun.kms20160120.Client kmsClient) {
+        // Step 1: Resolve keyVersionId via ListKeyVersions
+        String keyVersionId = resolveKeyVersionId(properties, kmsClient);
+
+        // Step 2: Load/fetch public key for local wrap (algorithm auto-detected)
+        PublicKey publicKey = resolvePublicKey(properties, kmsClient, keyVersionId);
+
+        log.info("Alibaba KMS CMK provider initialized: keyId={}, keyVersionId={}, keyType={}",
+                properties.getKeyId(), keyVersionId, publicKey.getAlgorithm());
+
+        return new AlibabaKmsCmkProvider(
+                properties.getKeyId(),
+                keyVersionId,
+                publicKey,
+                kmsClient);
+    }
+
+    /**
+     * Creates a provider for Symmetric (Envelope Encryption) keys.
+     */
+    private CmkProvider createSymmetricProvider(AlibabaKmsCmkProperties properties,
+                                                 com.aliyun.kms20160120.Client kmsClient) {
+        return new AlibabaKmsCmkProvider(
+                properties.getKeyId(),
+                properties.getEncryptionContext(),
+                kmsClient);
     }
 
     private String resolveKeyVersionId(AlibabaKmsCmkProperties properties,

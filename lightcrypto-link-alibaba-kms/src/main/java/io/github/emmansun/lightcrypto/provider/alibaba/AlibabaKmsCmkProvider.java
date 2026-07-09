@@ -1,15 +1,19 @@
 package io.github.emmansun.lightcrypto.provider.alibaba;
 
 import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.model.GeneratedKey;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
-
+import io.github.emmansun.lightcrypto.provider.alibaba.AlibabaKmsCmkProperties.Mode;
+import lombok.extern.slf4j.Slf4j;
 import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
+import org.apache.commons.logging.Log;
 import java.security.PublicKey;
 import java.security.spec.MGF1ParameterSpec;
 import java.util.Base64;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -31,6 +35,7 @@ import java.util.Objects;
  * {@link MGF1ParameterSpec#SHA256} is required.
  * </p>
  */
+@Slf4j
 public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     private static final String PROVIDER_ID = "alibaba-kms";
@@ -41,13 +46,17 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
     /** Alibaba KMS AsymmetricDecrypt API Algorithm parameter value for RSA-OAEP. */
     private static final String KMS_ALGORITHM_RSA = "RSAES_OAEP_SHA_256";
 
+    private static final String KMS_DATA_KEY = "KMS_DATA_KEY";
+
     /**
      * OAEP parameters: SHA-256 hash + MGF1-SHA-256 (matching KMS RSAES_OAEP_SHA_256).
      * Java's default OAEPWithSHA-256AndMGF1Padding uses MGF1-SHA-1 which is incompatible.
      */
     private static final OAEPParameterSpec RSA_OAEP_SPEC = new OAEPParameterSpec(
             "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
-
+    
+    private final Mode mode;
+    private final Map<String, String> encryptionContext;
     private final String keyId;
     private final String keyVersionId;
     private final PublicKey publicKey;
@@ -68,10 +77,12 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
      */
     public AlibabaKmsCmkProvider(String keyId, String keyVersionId, PublicKey publicKey,
                                   com.aliyun.kms20160120.Client kmsClient) {
+        this.mode = Mode.ASYMMETRIC;
         this.keyId = Objects.requireNonNull(keyId, "keyId must not be null");
         this.keyVersionId = keyVersionId;
         this.publicKey = Objects.requireNonNull(publicKey, "publicKey must not be null");
         this.kmsClient = Objects.requireNonNull(kmsClient, "kmsClient must not be null");
+        this.encryptionContext = null; // Not used in asymmetric mode
 
         String keyAlgorithm = publicKey.getAlgorithm();
         if ("RSA".equals(keyAlgorithm)) {
@@ -83,6 +94,25 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
                     "Unsupported public key algorithm: '" + keyAlgorithm
                             + "'. Supported: RSA, EC (SM2)");
         }
+    }
+
+    /**
+     * Construct an Alibaba KMS CMK provider in SYMMETRIC mode.
+     * <p>
+     * In SYMMETRIC mode, the provider uses KMS GenerateDataKey and Decrypt APIs for envelope encryption.
+     * </p>
+     * @param keyId              the KMS CMK key identifier
+     * @param encryptionContext  the encryption context for envelope encryption
+     * @param kmsClient          the Alibaba Cloud KMS client for remote operations
+     */
+    public AlibabaKmsCmkProvider(String keyId, Map<String, String> encryptionContext, com.aliyun.kms20160120.Client kmsClient) {
+        this.mode = Mode.SYMMETRIC;
+        this.keyId = Objects.requireNonNull(keyId, "keyId must not be null");
+        this.encryptionContext = encryptionContext;
+        this.kmsClient = Objects.requireNonNull(kmsClient, "kmsClient must not be null");
+        this.isRsa = false;
+        this.keyVersionId = null;
+        this.publicKey = null;
     }
 
     @Override
@@ -99,7 +129,49 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
     }
 
     @Override
+    public GeneratedKey generateKey(int keyLength) {
+        if (mode == Mode.ASYMMETRIC) {
+            return CmkProvider.super.generateKey(keyLength);
+        }
+        return generateDataKey(keyLength);
+    }
+
+    /**
+     * Generate a new random symmetric key of the specified length, wrap it with the CMK using KMS GenerateDataKey,
+     * and return both the plaintext key and its wrapped representation.
+     * 
+     * @param keyLength the length of the symmetric key to generate, in bytes
+     * @return a GeneratedKey containing the plaintext key and its wrapped representation
+     */
+    private GeneratedKey generateDataKey(int keyLength) {
+        try {
+            com.aliyun.kms20160120.models.GenerateDataKeyRequest request =
+                    new com.aliyun.kms20160120.models.GenerateDataKeyRequest()
+                            .setKeyId(keyId)
+                            .setNumberOfBytes(keyLength);
+            if (encryptionContext != null && !encryptionContext.isEmpty()) {
+                request.setEncryptionContext(encryptionContext);
+            }
+
+            com.aliyun.kms20160120.models.GenerateDataKeyResponse response =
+                    kmsClient.generateDataKey(request);
+            String plaintextBase64 = response.getBody().getPlaintext();
+            String ciphertextBase64 = response.getBody().getCiphertextBlob();
+
+            byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
+            byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
+
+            return new GeneratedKey(plaintext, new WrappedKey(ciphertext, KMS_DATA_KEY));
+        } catch (Exception e) {
+            throw new CryptoException("KMS GenerateDataKey failed for keyId=" + keyId, e);
+        }
+    }
+
+    @Override
     public WrappedKey wrap(byte[] plaintextKey) {
+        if (mode == Mode.SYMMETRIC) {
+            throw new UnsupportedOperationException("Wrap is not supported in SYMMETRIC mode");
+        }
         if (isRsa) {
             return rsaWrap(plaintextKey);
         }
@@ -108,6 +180,38 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     @Override
     public byte[] unwrap(WrappedKey wrappedKey) {
+        if (mode == Mode.SYMMETRIC) {
+            return unwrapSymmetric(wrappedKey);
+        }
+        return unwrapAsymmetric(wrappedKey);
+    }
+
+    private byte[] unwrapSymmetric(WrappedKey wrappedKey) {
+        if (!KMS_DATA_KEY.equals(wrappedKey.algorithm())) {
+            throw new IllegalArgumentException(
+                    "Unexpected WrappedKey algorithm: '" + wrappedKey.algorithm()
+                            + "'. Expected: " + KMS_DATA_KEY);
+        }
+        try {
+            String ciphertextBlob = Base64.getEncoder().encodeToString(wrappedKey.ciphertext());
+
+            com.aliyun.kms20160120.models.DecryptRequest request =
+                    new com.aliyun.kms20160120.models.DecryptRequest()
+                            .setCiphertextBlob(ciphertextBlob);
+            if (encryptionContext != null && !encryptionContext.isEmpty()) {
+                request.setEncryptionContext(encryptionContext);
+            }
+
+            com.aliyun.kms20160120.models.DecryptResponse response =
+                    kmsClient.decrypt(request);
+            String plaintextBase64 = response.getBody().getPlaintext();
+            return Base64.getDecoder().decode(plaintextBase64);
+        } catch (Exception e) {
+            throw new CryptoException("KMS Decrypt failed for keyId=" + keyId, e);
+        }
+    }
+
+    private byte[] unwrapAsymmetric(WrappedKey wrappedKey) {
         try {
             String kmsAlgorithm = mapToKmsAlgorithm(wrappedKey.algorithm());
             String ciphertextBlob = Base64.getEncoder().encodeToString(wrappedKey.ciphertext());
