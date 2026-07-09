@@ -5,11 +5,9 @@ import io.github.emmansun.lightcrypto.model.GeneratedKey;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.provider.alibaba.AlibabaKmsCmkProperties.Mode;
-import lombok.extern.slf4j.Slf4j;
 import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
-import org.apache.commons.logging.Log;
 import java.security.PublicKey;
 import java.security.spec.MGF1ParameterSpec;
 import java.util.Base64;
@@ -35,7 +33,6 @@ import java.util.Objects;
  * {@link MGF1ParameterSpec#SHA256} is required.
  * </p>
  */
-@Slf4j
 public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     private static final String PROVIDER_ID = "alibaba-kms";
