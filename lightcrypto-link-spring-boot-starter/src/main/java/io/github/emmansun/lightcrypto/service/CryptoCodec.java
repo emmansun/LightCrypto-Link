@@ -1,6 +1,11 @@
 package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
+import io.github.emmansun.lightcrypto.crypto.AesCbcEncryptor;
+import io.github.emmansun.lightcrypto.crypto.AesGcmEncryptor;
+import io.github.emmansun.lightcrypto.crypto.Sm4CbcEncryptor;
+import io.github.emmansun.lightcrypto.crypto.Sm4GcmEncryptor;
+import io.github.emmansun.lightcrypto.crypto.SymmetricEncryptor;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
 import lombok.extern.slf4j.Slf4j;
 import java.nio.charset.StandardCharsets;
@@ -42,27 +47,20 @@ public class CryptoCodec {
         this.encryptors = new EnumMap<>(SymmetricAlgorithm.class);
         registerEncryptor(new AesGcmEncryptor());
         registerEncryptor(new AesCbcEncryptor());
-        loadOptionalEncryptor("io.github.emmansun.lightcrypto.service.Sm4GcmEncryptor");
-        loadOptionalEncryptor("io.github.emmansun.lightcrypto.service.Sm4CbcEncryptor");
+        loadOptionalEncryptor(Sm4GcmEncryptor.class);
+        loadOptionalEncryptor(Sm4CbcEncryptor.class);
     }
 
     private void registerEncryptor(SymmetricEncryptor encryptor) {
         encryptors.put(encryptor.getAlgorithm(), encryptor);
     }
 
-    private void loadOptionalEncryptor(String className) {
-        if (java.security.Security.getProvider("BC") == null) {
-            log.warn("Bouncy Castle provider not found, skipping optional encryptor: {}", className);
-            return;
-        }
+    private void loadOptionalEncryptor(Class<? extends SymmetricEncryptor> clazz) {
         try {
-            Class<?> clazz = Class.forName(className);
-            
-            SymmetricEncryptor instance = (SymmetricEncryptor) clazz.getDeclaredConstructor().newInstance();
-            
-            registerEncryptor(instance);
-        } catch (Exception e) {
-            log.warn("Failed to load optional encryptor: {}", className, e);
+            SymmetricEncryptor encryptor = clazz.getDeclaredConstructor().newInstance();
+            registerEncryptor(encryptor);
+        } catch (Throwable e) {
+            log.warn("Skip optional encryptor {}: {}", clazz.getSimpleName(), e.getMessage());
         }
     }
 

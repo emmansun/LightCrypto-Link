@@ -1,4 +1,4 @@
-package io.github.emmansun.lightcrypto.service;
+package io.github.emmansun.lightcrypto.crypto;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
@@ -6,24 +6,23 @@ import io.github.emmansun.lightcrypto.util.CryptoUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.Security;
 import java.util.Arrays;
 import java.util.HexFormat;
 
 /**
- * SM4-GCM encryptor implementation.
- * Uses 16-byte key (derived from first 16 bytes of DEK), 12-byte IV,
- * SM4/GCM/NoPadding cipher via Bouncy Castle.
+ * SM4-CBC encryptor implementation.
+ * Uses 16-byte key (derived from first 16 bytes of DEK), 16-byte IV,
+ * SM4/CBC/PKCS5Padding cipher via Bouncy Castle.
  */
-public class Sm4GcmEncryptor implements SymmetricEncryptor {
+public class Sm4CbcEncryptor implements SymmetricEncryptor {
 
     private static final int SM4_KEY_LENGTH = 16;
-    private static final int IV_LENGTH = 12;
-    private static final int GCM_TAG_BITS = 128;
+    private static final int IV_LENGTH = 16;
     private static final int ZERO_BLOCK_SIZE = 16;
-    private static final String CIPHER_ALGORITHM = "SM4/GCM/NoPadding";
+    private static final String CIPHER_ALGORITHM = "SM4/CBC/PKCS5Padding";
     private static final String KEY_ALGORITHM = "SM4";
 
     static {
@@ -40,7 +39,7 @@ public class Sm4GcmEncryptor implements SymmetricEncryptor {
             Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM, BouncyCastleProvider.PROVIDER_NAME);
             cipher.init(Cipher.ENCRYPT_MODE,
                     new SecretKeySpec(sm4Key, KEY_ALGORITHM),
-                    new GCMParameterSpec(GCM_TAG_BITS, iv));
+                    new IvParameterSpec(iv));
 
             byte[] ciphertext = cipher.doFinal(plaintext);
 
@@ -49,7 +48,7 @@ public class Sm4GcmEncryptor implements SymmetricEncryptor {
             System.arraycopy(ciphertext, 0, result, IV_LENGTH, ciphertext.length);
             return result;
         } catch (Exception e) {
-            throw new CryptoException("SM4-GCM encryption failed", e);
+            throw new CryptoException("SM4-CBC encryption failed", e);
         }
     }
 
@@ -63,11 +62,11 @@ public class Sm4GcmEncryptor implements SymmetricEncryptor {
             Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM, BouncyCastleProvider.PROVIDER_NAME);
             cipher.init(Cipher.DECRYPT_MODE,
                     new SecretKeySpec(sm4Key, KEY_ALGORITHM),
-                    new GCMParameterSpec(GCM_TAG_BITS, iv));
+                    new IvParameterSpec(iv));
 
             return cipher.doFinal(ciphertext);
         } catch (Exception e) {
-            throw new CryptoException("SM4-GCM decryption failed", e);
+            throw new CryptoException("SM4-CBC decryption failed", e);
         }
     }
 
@@ -81,17 +80,17 @@ public class Sm4GcmEncryptor implements SymmetricEncryptor {
             Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM, BouncyCastleProvider.PROVIDER_NAME);
             cipher.init(Cipher.ENCRYPT_MODE,
                     new SecretKeySpec(sm4Key, KEY_ALGORITHM),
-                    new GCMParameterSpec(GCM_TAG_BITS, zeroIv));
+                    new IvParameterSpec(zeroIv));
 
             byte[] encrypted = cipher.doFinal(zeroBlock);
             return HexFormat.of().formatHex(encrypted);
         } catch (Exception e) {
-            throw new CryptoException("SM4-GCM KCV computation failed", e);
+            throw new CryptoException("SM4-CBC KCV computation failed", e);
         }
     }
 
     @Override
     public SymmetricAlgorithm getAlgorithm() {
-        return SymmetricAlgorithm.SM4_GCM;
+        return SymmetricAlgorithm.SM4_CBC;
     }
 }

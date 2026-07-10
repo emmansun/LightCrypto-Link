@@ -48,7 +48,7 @@ public class DemoRunner implements CommandLineRunner {
         alice.setAge(30);
         alice.setBirthDate(LocalDate.of(1995, 6, 15));
         userRepository.save(alice);
-        System.out.println("[SAVE] Alice saved — @Encrypted fields encrypted with AES-256-GCM.");
+        System.out.println("[SAVE] Alice saved — @Encrypted fields encrypted with symmetric algorithm.");
         System.out.println("  DEK wrapped locally via RSA-OAEP (no KMS network call on write).\n");
 
         // 2. Read — fields are decrypted transparently

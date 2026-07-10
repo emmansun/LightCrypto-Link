@@ -72,6 +72,7 @@ public class FieldCryptoService {
         return rawDocument;
     }
 
+    @SuppressWarnings("unchecked")
     private void decryptField(Document document, EncryptedFieldMetadata meta, int depth) {
         PathSegmentType pathType = meta.pathTypes().get(depth);
         String segment = meta.path().get(depth);

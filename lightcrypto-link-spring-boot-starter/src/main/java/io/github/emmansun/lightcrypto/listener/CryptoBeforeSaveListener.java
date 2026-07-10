@@ -72,6 +72,7 @@ public class CryptoBeforeSaveListener {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void applyEncryption(EncryptedFieldMetadata meta,
                                  Object javaContext,
                                  Document bsonContext,
@@ -242,7 +243,6 @@ public class CryptoBeforeSaveListener {
         return subDoc;
     }
 
-    @SuppressWarnings("unchecked")
     private byte[] serializeStructuredValue(Object value, String typeMarker) {
         Document payload = switch (typeMarker) {
             case "DOC", "MAP" -> (Document) value;

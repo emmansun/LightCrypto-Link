@@ -1,4 +1,4 @@
-package io.github.emmansun.lightcrypto.service;
+package io.github.emmansun.lightcrypto.crypto;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 

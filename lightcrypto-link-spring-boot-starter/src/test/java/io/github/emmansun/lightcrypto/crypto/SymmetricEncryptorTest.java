@@ -1,6 +1,11 @@
-package io.github.emmansun.lightcrypto.service;
+package io.github.emmansun.lightcrypto.crypto;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
+import io.github.emmansun.lightcrypto.crypto.AesCbcEncryptor;
+import io.github.emmansun.lightcrypto.crypto.AesGcmEncryptor;
+import io.github.emmansun.lightcrypto.crypto.Sm4CbcEncryptor;
+import io.github.emmansun.lightcrypto.crypto.Sm4GcmEncryptor;
+import io.github.emmansun.lightcrypto.crypto.SymmetricEncryptor;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
