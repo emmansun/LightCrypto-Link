@@ -2,7 +2,7 @@ package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
-
+import lombok.extern.slf4j.Slf4j;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -19,7 +19,19 @@ import javax.crypto.spec.SecretKeySpec;
  * Uses strategy pattern to dispatch to algorithm-specific encryptors:
  * AES-256-GCM, AES-256-CBC, SM4-GCM, SM4-CBC.
  */
+@Slf4j
 public class CryptoCodec {
+    static {
+        if (java.security.Security.getProvider("BC") == null) {
+            try {
+                Class<?> clazz = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider");
+                java.security.Provider provider = (java.security.Provider) clazz.getDeclaredConstructor().newInstance();
+                java.security.Security.addProvider(provider);
+            } catch (ReflectiveOperationException e) {
+                // ignore
+            }
+        }
+    }
 
     private final Map<SymmetricAlgorithm, SymmetricEncryptor> encryptors;
 
@@ -40,6 +52,7 @@ public class CryptoCodec {
 
     private void loadOptionalEncryptor(String className) {
         if (java.security.Security.getProvider("BC") == null) {
+            log.warn("Bouncy Castle provider not found, skipping optional encryptor: {}", className);
             return;
         }
         try {
@@ -49,6 +62,7 @@ public class CryptoCodec {
             
             registerEncryptor(instance);
         } catch (Exception e) {
+            log.warn("Failed to load optional encryptor: {}", className, e);
         }
     }
 

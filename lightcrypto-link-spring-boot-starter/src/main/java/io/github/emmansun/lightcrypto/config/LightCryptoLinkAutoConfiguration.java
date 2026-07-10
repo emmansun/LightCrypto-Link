@@ -34,18 +34,6 @@ import java.util.HexFormat;
         repositoryFactoryBeanClass = CryptoMongoRepositoryFactoryBean.class
 )
 public class LightCryptoLinkAutoConfiguration {
-    static {
-        if (java.security.Security.getProvider("BC") == null) {
-            try {
-                Class<?> clazz = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider");
-                java.security.Provider provider = (java.security.Provider) clazz.getDeclaredConstructor().newInstance();
-                java.security.Security.addProvider(provider);
-            } catch (ReflectiveOperationException e) {
-                // ignore
-            }
-        }
-    }
-
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "lcl.crypto", name = "cmk")
