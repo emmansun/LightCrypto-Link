@@ -8,7 +8,6 @@ import io.github.emmansun.lightcrypto.provider.LocalSymmetricCmkProvider;
 import io.github.emmansun.lightcrypto.query.CryptoMongoQueryCreator;
 import io.github.emmansun.lightcrypto.query.CryptoMongoRepositoryFactoryBean;
 import io.github.emmansun.lightcrypto.service.*;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -25,7 +24,6 @@ import org.springframework.data.mongodb.core.mapping.MongoPersistentEntity;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentProperty;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
 
-import java.security.Security;
 import java.util.HexFormat;
 
 @AutoConfiguration
@@ -36,13 +34,18 @@ import java.util.HexFormat;
         repositoryFactoryBeanClass = CryptoMongoRepositoryFactoryBean.class
 )
 public class LightCryptoLinkAutoConfiguration {
-
     static {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
+        if (java.security.Security.getProvider("BC") == null) {
+            try {
+                Class<?> clazz = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider");
+                java.security.Provider provider = (java.security.Provider) clazz.getDeclaredConstructor().newInstance();
+                java.security.Security.addProvider(provider);
+            } catch (Exception e) {
+                // ignore
+            }
         }
     }
-
+    
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "lcl.crypto", name = "cmk")

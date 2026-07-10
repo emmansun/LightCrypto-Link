@@ -2,14 +2,15 @@ package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
-import org.bouncycastle.crypto.macs.HMac;
-import org.bouncycastle.crypto.params.KeyParameter;
-import org.bouncycastle.crypto.digests.SHA256Digest;
 
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.EnumMap;
 import java.util.Map;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Core crypto engine — multi-algorithm encryption/decryption + HMAC-SHA-256 blind index
@@ -29,12 +30,26 @@ public class CryptoCodec {
         this.encryptors = new EnumMap<>(SymmetricAlgorithm.class);
         registerEncryptor(new AesGcmEncryptor());
         registerEncryptor(new AesCbcEncryptor());
-        registerEncryptor(new Sm4GcmEncryptor());
-        registerEncryptor(new Sm4CbcEncryptor());
+        loadOptionalEncryptor("io.github.emmansun.lightcrypto.service.Sm4GcmEncryptor");
+        loadOptionalEncryptor("io.github.emmansun.lightcrypto.service.Sm4CbcEncryptor");
     }
 
     private void registerEncryptor(SymmetricEncryptor encryptor) {
         encryptors.put(encryptor.getAlgorithm(), encryptor);
+    }
+
+    private void loadOptionalEncryptor(String className) {
+        if (java.security.Security.getProvider("BC") == null) {
+            return;
+        }
+        try {
+            Class<?> clazz = Class.forName(className);
+            
+            SymmetricEncryptor instance = (SymmetricEncryptor) clazz.getDeclaredConstructor().newInstance();
+            
+            registerEncryptor(instance);
+        } catch (Exception e) {
+        }
     }
 
     /**
@@ -114,12 +129,7 @@ public class CryptoCodec {
         input[fieldNameBytes.length] = 0x3A; // colon separator
         System.arraycopy(serializedValue, 0, input, fieldNameBytes.length + 1, serializedValue.length);
 
-        HMac hmac = new HMac(new SHA256Digest());
-        hmac.init(new KeyParameter(hmacKey));
-        hmac.update(input, 0, input.length);
-
-        byte[] result = new byte[hmac.getMacSize()];
-        hmac.doFinal(result, 0);
+        byte[] result = calculateHmacSHA256(hmacKey, input);
 
         return Base64.getUrlEncoder().withoutPadding().encodeToString(result);
     }
@@ -128,14 +138,18 @@ public class CryptoCodec {
      * Compute a dual-key binding fingerprint: HMAC-SHA-256(hmacKey, dek).
      */
     public String computeBinding(byte[] hmacKey, byte[] dek) {
-        HMac hmac = new HMac(new SHA256Digest());
-        hmac.init(new KeyParameter(hmacKey));
-        hmac.update(dek, 0, dek.length);
-
-        byte[] result = new byte[hmac.getMacSize()];
-        hmac.doFinal(result, 0);
-
+        byte[] result = calculateHmacSHA256(hmacKey, dek);
         return java.util.HexFormat.of().formatHex(result);
+    }
+
+    private static byte[] calculateHmacSHA256(byte[] key, byte[] data) {
+        try {
+            Mac hmac = Mac.getInstance("HmacSHA256");
+            hmac.init(new SecretKeySpec(key, "HmacSHA256"));
+            return hmac.doFinal(data);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new IllegalStateException("Failed to initialize HmacSHA256", e);
+        }
     }
 
     private SymmetricEncryptor getEncryptor(SymmetricAlgorithm algorithm) {
