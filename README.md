@@ -28,6 +28,7 @@ Deep docs are in [docs](docs/):
 - [Architecture, Envelope, Storage Format, Rotation](docs/architecture.md)
 - [CMK Provider SPI](docs/spi-cmk-provider.md)
 - [Migration: introduce LCL to existing plaintext data](docs/migration/introduce-lcl-to-existing-plaintext-data.md)
+- [Wiki](https://github.com/emmansun/LightCrypto-Link/wiki)
 
 ## Features
 
