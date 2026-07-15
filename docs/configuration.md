@@ -11,6 +11,7 @@ This document contains the full configuration reference for LCL.
 | `lcl.crypto.algorithm` | `SymmetricAlgorithm` | `AES_256_GCM` | Global default algorithm for `@Encrypted` |
 | `lcl.crypto.keyVaultDatabase` | `String` | app database | MongoDB database holding `__lcl_keyvault` |
 | `lcl.crypto.autoInit` | `boolean` | `true` | Auto-create vault on first startup |
+| `lcl.crypto.cacheTtl` | `Duration` | `PT1H` (1 hour) | TTL for the in-memory DEK/HMAC key cache. After expiry, keys are securely zeroed and reloaded from MongoDB. Set `PT0S` to disable caching. |
 
 ## Local Symmetric CMK
 
@@ -20,6 +21,7 @@ lcl:
     cmk: ${LCL_CMK_HEX}
     enabled: true
     algorithm: AES_256_GCM
+    cache-ttl: PT1H  # DEK cache TTL (use PT0S to disable caching)
 ```
 
 ## Azure Key Vault

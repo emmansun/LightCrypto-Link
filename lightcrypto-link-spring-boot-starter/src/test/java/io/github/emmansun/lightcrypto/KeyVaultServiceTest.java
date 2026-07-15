@@ -9,9 +9,12 @@ import io.github.emmansun.lightcrypto.service.CryptoCodec;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.time.Instant;
+import java.time.*;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -127,6 +130,121 @@ class KeyVaultServiceTest {
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TestEntity.class.getSimpleName()))
                 .isInstanceOf(FatalCryptoException.class)
                 .hasMessageContaining("Failed to verify key vault");
+    }
+
+    @Test
+    void defaultCacheTtlIsOneHour() {
+        CryptoProperties props = new CryptoProperties();
+        assertThat(props.getCacheTtl()).isEqualTo(Duration.ofHours(1));
+    }
+
+    @Test
+    void cacheEntryHasFutureExpiresAtWithinTtl() throws Exception {
+        CryptoProperties props = new CryptoProperties();
+        props.setCacheTtl(Duration.ofHours(1));
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), props, CODEC);
+        byte[] dek = fixedKey((byte) 0x11);
+        byte[] hmac = fixedKey((byte) 0x22);
+        String kid = "v1-a1b2c3d4";
+        KeyVaultDocument doc = vaultDoc("lcl-dek-TestEntity", kid, List.of(activeEntry(kid, dek, hmac)));
+
+        invokeVerifyAndLoadKeys(service, doc, TestEntity.class.getSimpleName());
+
+        assertThat(service.getActiveKid(TestEntity.class)).isEqualTo(kid);
+        // DEK is the same reference (cached)
+        assertThat(service.getDek(kid)).isSameAs(service.getDek(kid));
+    }
+
+    @Test
+    void cacheEntryExpiresAtIsEpochWhenTtlIsZero() throws Exception {
+        CryptoProperties props = new CryptoProperties();
+        props.setCacheTtl(Duration.ZERO);
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), props, CODEC);
+        byte[] dek = fixedKey((byte) 0x11);
+        byte[] hmac = fixedKey((byte) 0x22);
+        String kid = "v1-a1b2c3d4";
+        KeyVaultDocument doc = vaultDoc("lcl-dek-TestEntity", kid, List.of(activeEntry(kid, dek, hmac)));
+
+        invokeVerifyAndLoadKeys(service, doc, TestEntity.class.getSimpleName());
+
+        // When TTL is zero, the entry is NOT stored in cache
+        Field mapField = KeyVaultService.class.getDeclaredField("entityKeyContexts");
+        mapField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        ConcurrentHashMap<String, ?> map = (ConcurrentHashMap<String, ?>) mapField.get(service);
+        assertThat(map).isEmpty();
+    }
+
+    @Test
+    void flushCacheZerosKeyMaterialAndClearsMap() throws Exception {
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties(), CODEC);
+        byte[] dek = fixedKey((byte) 0x11);
+        byte[] hmac = fixedKey((byte) 0x22);
+        String kid = "v1-a1b2c3d4";
+        KeyVaultDocument doc = vaultDoc("lcl-dek-TestEntity", kid, List.of(activeEntry(kid, dek, hmac)));
+
+        invokeVerifyAndLoadKeys(service, doc, TestEntity.class.getSimpleName());
+
+        // Grab references to the cached byte arrays before flushing
+        byte[] cachedDek = service.getDek(kid);
+        byte[] cachedHmac = service.getHmacKey(kid);
+        assertThat(cachedDek).containsExactly(dek);
+        assertThat(cachedHmac).containsExactly(hmac);
+
+        service.flushCache();
+
+        // Arrays are zeroed
+        assertThat(cachedDek).containsOnly((byte) 0);
+        assertThat(cachedHmac).containsOnly((byte) 0);
+
+        // Map is cleared
+        Field mapField = KeyVaultService.class.getDeclaredField("entityKeyContexts");
+        mapField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        ConcurrentHashMap<String, ?> map = (ConcurrentHashMap<String, ?>) mapField.get(service);
+        assertThat(map).isEmpty();
+
+        // getActiveKid throws after flush
+        assertThatThrownBy(() -> service.getActiveKid(TestEntity.class))
+                .isInstanceOf(FatalCryptoException.class);
+    }
+
+    @Test
+    void expiredEntryIsDetectedByIsExpired() throws Exception {
+        CryptoProperties props = new CryptoProperties();
+        props.setCacheTtl(Duration.ofHours(1));
+
+        // Use a fixed clock in the past so expiresAt = pastTime + 1h = still in the past
+        Instant fixedPastTime = Instant.parse("2020-01-01T00:00:00Z");
+        Clock fixedClock = Clock.fixed(fixedPastTime, ZoneOffset.UTC);
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), props, CODEC, fixedClock);
+
+        byte[] dek = fixedKey((byte) 0x11);
+        byte[] hmac = fixedKey((byte) 0x22);
+        String kid = "v1-a1b2c3d4";
+        KeyVaultDocument doc = vaultDoc("lcl-dek-TestEntity", kid, List.of(activeEntry(kid, dek, hmac)));
+
+        invokeVerifyAndLoadKeys(service, doc, TestEntity.class.getSimpleName());
+
+        // expiresAt was computed as 2020-01-01T01:00:00Z which is in the past relative to now
+        // The entry should be expired
+        Field mapField = KeyVaultService.class.getDeclaredField("entityKeyContexts");
+        mapField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        ConcurrentHashMap<String, ?> map = (ConcurrentHashMap<String, ?>) mapField.get(service);
+        Object ctx = map.get("TestEntity");
+        assertThat(ctx).isNotNull();
+
+        Method isExpired = ctx.getClass().getDeclaredMethod("isExpired");
+        isExpired.setAccessible(true);
+        assertThat((boolean) isExpired.invoke(ctx)).isTrue();
+    }
+
+    @Test
+    void customCacheTtlIsRespected() {
+        CryptoProperties props = new CryptoProperties();
+        props.setCacheTtl(Duration.ofMinutes(30));
+        assertThat(props.getCacheTtl()).isEqualTo(Duration.ofMinutes(30));
     }
 
     @Test

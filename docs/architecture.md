@@ -65,6 +65,16 @@ Behavior:
 3. New `kid` becomes ACTIVE.
 4. New writes use new `kid`; old ciphertext can still be read via old entries.
 
+## DEK Cache
+
+`KeyVaultService` caches unwrapped DEK and HMAC keys in memory to avoid repeated MongoDB reads and CMK unwrap operations.
+
+- **Storage**: `ConcurrentHashMap<String, EntityKeyContext>` keyed by entity class simple name.
+- **TTL**: Configurable via `lcl.crypto.cache-ttl` (default `PT1H` / 1 hour). Expired entries are lazily evicted on the next access — no background thread is needed.
+- **Secure eviction**: When a cache entry expires or is flushed, all `byte[]` key material (DEK and HMAC keys, including historical versions) is explicitly zeroed with `Arrays.fill()` before the entry is removed.
+- **Disable caching**: Set `lcl.crypto.cache-ttl=PT0S` to skip caching entirely. Every access will reload from MongoDB and verify KCV/binding.
+- **Manual flush**: Call `keyVaultService.flushCache()` to immediately zero and evict all cached entries (e.g., on shutdown or after a security event).
+
 ## Blind Index
 
 When `@Encrypted(blindIndex = true)`:

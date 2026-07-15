@@ -34,7 +34,7 @@ Each vault document SHALL maintain a `keys[]` array where each entry contains `k
 - **THEN** for each key entry in `keys[]`, the system SHALL unwrap the DEK and HMAC key, verify KCV for both, and verify the binding hash between them. If any check fails, the system SHALL throw `FatalCryptoException`.
 
 ### Requirement: Entity-class-aware key lookup
-`KeyVaultService` SHALL provide methods to get the active DEK/HMAC key for a specific entity class: `getActiveKid(Class<?> entityClass)`, `getDek(String kid)`, `getHmacKey(String kid)`.
+`KeyVaultService` SHALL provide methods to get the active DEK/HMAC key for a specific entity class: `getActiveKid(Class<?> entityClass)`, `getDek(String kid)`, `getHmacKey(String kid)`. All cache reads SHALL be subject to TTL-based expiry as defined in the `dek-cache-ttl` capability.
 
 #### Scenario: Encrypt uses active key for entity class
 - **WHEN** encrypting a field of entity `User`
@@ -47,6 +47,10 @@ Each vault document SHALL maintain a `keys[]` array where each entry contains `k
 #### Scenario: Decryption with rotated key succeeds
 - **WHEN** a field was encrypted with key version `v1` and `v1` has been rotated (status = ROTATED)
 - **THEN** decryption SHALL still succeed because the rotated key entry remains in the vault
+
+#### Scenario: Cache expired before key lookup
+- **WHEN** `getDek(kid)` is called and the cache entry for the owning entity class has expired
+- **THEN** the system SHALL reload the vault from MongoDB (with KCV/binding verification), re-populate the cache, and return the requested DEK
 
 ### Requirement: DEK Rotation
 `KeyVaultService.rotateKey(Class<?> entityClass)` SHALL mark the current active key as ROTATED, generate a new DEK/HMAC key pair with incremented version, insert the new entry into `keys[]`, update `activeKid`, and persist to MongoDB.

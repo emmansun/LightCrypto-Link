@@ -4,6 +4,8 @@ import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
+
 /**
  * LCL encryption configuration properties.
  */
@@ -25,4 +27,13 @@ public class CryptoProperties {
 
     /** Auto-initialize the vault on first startup (default true). */
     private boolean autoInit = true;
+
+    /**
+     * TTL for the in-memory DEK/HMAC key cache. After this duration, cached key material
+     * is securely zeroed and evicted on the next access, forcing a reload from MongoDB.
+     * <p>
+     * Default: 1 hour ({@code PT1H}). Set to {@code PT0S} to disable caching entirely.
+     * </p>
+     */
+    private Duration cacheTtl = Duration.ofHours(1);
 }

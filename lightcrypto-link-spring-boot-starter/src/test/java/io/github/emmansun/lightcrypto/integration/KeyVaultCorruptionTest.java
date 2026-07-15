@@ -18,6 +18,8 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.*;
 
 /**
@@ -186,6 +188,42 @@ class KeyVaultCorruptionTest {
                 .replaceOne(staleFilter, staleVault);
 
         assertThat(result.getMatchedCount()).isZero();
+    }
+
+    // ===== TTL cache expiry integration test =====
+
+    @Test
+    @Order(6)
+    void cacheExpiryTriggersReloadAndZerosOldKeyMaterial() throws Exception {
+        // Create a service with a very short TTL (100ms)
+        CryptoProperties shortTtlProps = new CryptoProperties();
+        shortTtlProps.setCmk(properties.getCmk());
+        shortTtlProps.setCacheTtl(Duration.ofMillis(100));
+
+        KeyVaultService shortTtlService = new KeyVaultService(
+                mongoTemplate, cmkProvider, shortTtlProps, cryptoCodec);
+        shortTtlService.ensureVaultInitialized(IntTestUser.class);
+
+        // Grab references to the cached key material
+        String kid = shortTtlService.getActiveKid(IntTestUser.class);
+        byte[] dekRef = shortTtlService.getDek(kid);
+        byte[] hmacRef = shortTtlService.getHmacKey(kid);
+        assertThat(dekRef).hasSize(32);
+
+        // Wait for TTL to expire
+        Thread.sleep(200);
+
+        // Trigger reload — this should evict the old entry and reload from MongoDB
+        shortTtlService.ensureVaultInitialized(IntTestUser.class);
+
+        // Old key material should be zeroed
+        assertThat(dekRef).containsOnly((byte) 0);
+        assertThat(hmacRef).containsOnly((byte) 0);
+
+        // New entry should be valid
+        String newKid = shortTtlService.getActiveKid(IntTestUser.class);
+        assertThat(shortTtlService.getDek(newKid)).hasSize(32);
+        assertThat(shortTtlService.getDek(newKid)).isNotEqualTo(new byte[32]); // not all zeros
     }
 
     // ===== Helper methods =====

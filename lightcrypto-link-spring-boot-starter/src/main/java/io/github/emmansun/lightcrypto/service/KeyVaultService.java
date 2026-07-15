@@ -17,6 +17,8 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,27 +43,47 @@ public class KeyVaultService {
     private final CmkProvider cmkProvider;
     private final CryptoProperties properties;
     private final CryptoCodec cryptoCodec;
+    private final Duration cacheTtl;
+    private final Clock clock;
 
     /** Per-entity-class key contexts: entityClassName -> EntityKeyContext. */
     private final ConcurrentHashMap<String, EntityKeyContext> entityKeyContexts = new ConcurrentHashMap<>();
 
     public KeyVaultService(MongoTemplate mongoTemplate, CmkProvider cmkProvider,
                            CryptoProperties properties, CryptoCodec cryptoCodec) {
+        this(mongoTemplate, cmkProvider, properties, cryptoCodec, Clock.systemUTC());
+    }
+
+    /**
+     * Constructor for testing with a custom {@link Clock} to control time-based expiry.
+     * Not intended for production use.
+     */
+    public KeyVaultService(MongoTemplate mongoTemplate, CmkProvider cmkProvider,
+                    CryptoProperties properties, CryptoCodec cryptoCodec, Clock clock) {
         this.mongoTemplate = mongoTemplate;
         this.cmkProvider = cmkProvider;
         this.properties = properties;
         this.cryptoCodec = cryptoCodec;
+        this.cacheTtl = properties != null ? properties.getCacheTtl() : Duration.ofHours(1);
+        this.clock = clock;
     }
 
     /**
      * Ensure vault is initialized for the given entity class. Lazily initializes
-     * if the vault does not yet exist.
+     * if the vault does not yet exist. Cached entries are checked for TTL expiry;
+     * expired entries are securely evicted and reloaded from MongoDB.
      */
     public void ensureVaultInitialized(Class<?> entityClass) {
         String className = entityClass.getSimpleName();
-        if (entityKeyContexts.containsKey(className)) return;
+        EntityKeyContext existing = entityKeyContexts.get(className);
+        if (existing != null && !existing.isExpired()) return;
         synchronized (this) {
-            if (entityKeyContexts.containsKey(className)) return;
+            existing = entityKeyContexts.get(className);
+            if (existing != null && !existing.isExpired()) return;
+            if (existing != null) {
+                destroyKeyMaterial(existing);
+                entityKeyContexts.remove(className);
+            }
             initForEntity(entityClass);
         }
     }
@@ -309,8 +331,10 @@ public class KeyVaultService {
                 throw new FatalCryptoException("Vault has multiple ACTIVE key entries: " + doc.getId());
             }
 
-            EntityKeyContext ctx = new EntityKeyContext(activeKid, resolvedKeys);
-            entityKeyContexts.put(entityClassName, ctx);
+            EntityKeyContext ctx = new EntityKeyContext(activeKid, resolvedKeys, computeExpiresAt());
+            if (!cacheTtl.isZero()) {
+                entityKeyContexts.put(entityClassName, ctx);
+            }
 
             log.info("Key vault loaded and verified: {} (active kid: {})", doc.getId(), activeKid);
         } catch (FatalCryptoException e) {
@@ -340,6 +364,37 @@ public class KeyVaultService {
         }
     }
 
+    // ===== Cache management =====
+
+    /**
+     * Flush the DEK cache, securely destroying all cached key material.
+     * After this call the cache is empty and subsequent accesses will
+     * trigger a full reload from MongoDB with KCV/binding re-verification.
+     */
+    public void flushCache() {
+        synchronized (this) {
+            for (EntityKeyContext ctx : entityKeyContexts.values()) {
+                destroyKeyMaterial(ctx);
+            }
+            entityKeyContexts.clear();
+            log.info("DEK cache flushed; all key material securely zeroed");
+        }
+    }
+
+    private void destroyKeyMaterial(EntityKeyContext ctx) {
+        for (ResolvedKeyPair pair : ctx.resolvedKeys.values()) {
+            Arrays.fill(pair.dek, (byte) 0);
+            Arrays.fill(pair.hmacKey, (byte) 0);
+        }
+    }
+
+    private Instant computeExpiresAt() {
+        if (cacheTtl.isZero()) {
+            return Instant.EPOCH; // always expired when TTL is zero
+        }
+        return Instant.now(clock).plus(cacheTtl);
+    }
+
     // ===== Inner classes =====
 
     /** Holds unwrapped DEK and HMAC key pair. */
@@ -353,14 +408,20 @@ public class KeyVaultService {
         }
     }
 
-    /** Per-entity-class key context with active kid and all resolved key pairs. */
+    /** Per-entity-class key context with active kid, all resolved key pairs, and TTL expiry. */
     static class EntityKeyContext {
         final String activeKid;
         final Map<String, ResolvedKeyPair> resolvedKeys;
+        final Instant expiresAt;
 
-        EntityKeyContext(String activeKid, Map<String, ResolvedKeyPair> resolvedKeys) {
+        EntityKeyContext(String activeKid, Map<String, ResolvedKeyPair> resolvedKeys, Instant expiresAt) {
             this.activeKid = activeKid;
             this.resolvedKeys = resolvedKeys;
+            this.expiresAt = expiresAt;
+        }
+
+        boolean isExpired() {
+            return !Instant.now().isBefore(expiresAt);
         }
     }
 }
