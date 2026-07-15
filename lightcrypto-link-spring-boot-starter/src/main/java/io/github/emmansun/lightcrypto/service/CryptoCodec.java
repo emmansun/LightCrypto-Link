@@ -26,10 +26,15 @@ import javax.crypto.spec.SecretKeySpec;
  */
 @Slf4j
 public class CryptoCodec {
+
+    private static final String HMAC_SHA256 = "HmacSHA256";
+    private static final String BC_PROVIDER_NAME = "BC";
+    private static final String BC_PROVIDER_CLASS = "org.bouncycastle.jce.provider.BouncyCastleProvider";
+
     static {
-        if (java.security.Security.getProvider("BC") == null) {
+        if (java.security.Security.getProvider(BC_PROVIDER_NAME) == null) {
             try {
-                Class<?> clazz = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider");
+                Class<?> clazz = Class.forName(BC_PROVIDER_CLASS);
                 java.security.Provider provider = (java.security.Provider) clazz.getDeclaredConstructor().newInstance();
                 java.security.Security.addProvider(provider);
             } catch (ReflectiveOperationException e) {
@@ -134,16 +139,19 @@ public class CryptoCodec {
      * Accepts byte[] for the serialized value and outputs base64url without padding.
      */
     public String generateBlindIndex(byte[] hmacKey, String fieldName, byte[] serializedValue) {
-        byte[] fieldNameBytes = fieldName.getBytes(StandardCharsets.UTF_8);
-        // Build HMAC input: fieldNameBytes + ":" + serializedValue
-        byte[] input = new byte[fieldNameBytes.length + 1 + serializedValue.length];
-        System.arraycopy(fieldNameBytes, 0, input, 0, fieldNameBytes.length);
-        input[fieldNameBytes.length] = 0x3A; // colon separator
-        System.arraycopy(serializedValue, 0, input, fieldNameBytes.length + 1, serializedValue.length);
+        try {
+            Mac hmac = Mac.getInstance(HMAC_SHA256);
+            hmac.init(new SecretKeySpec(hmacKey, HMAC_SHA256));
+            hmac.update(fieldName.getBytes(StandardCharsets.UTF_8));
+            // Build HMAC input: fieldNameBytes + ":" + serializedValue
+            hmac.update((byte) 0x3A); // colon separator
+            hmac.update(serializedValue);
+            byte[] result = hmac.doFinal();
 
-        byte[] result = calculateHmacSHA256(hmacKey, input);
-
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(result);
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(result);
+        } catch (Exception e) {
+            throw new CryptoException("Failed to generate blind index", e);
+        }
     }
 
     /**
@@ -156,11 +164,11 @@ public class CryptoCodec {
 
     private static byte[] calculateHmacSHA256(byte[] key, byte[] data) {
         try {
-            Mac hmac = Mac.getInstance("HmacSHA256");
-            hmac.init(new SecretKeySpec(key, "HmacSHA256"));
+            Mac hmac = Mac.getInstance(HMAC_SHA256);
+            hmac.init(new SecretKeySpec(key, HMAC_SHA256));
             return hmac.doFinal(data);
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new IllegalStateException("Failed to initialize HmacSHA256", e);
+            throw new CryptoException("Failed to initialize HmacSHA256", e);
         }
     }
 
