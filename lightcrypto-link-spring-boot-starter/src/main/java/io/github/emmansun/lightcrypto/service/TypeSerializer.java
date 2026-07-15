@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * the same output (deterministic), which is a prerequisite for HMAC blind indexes.
  */
 public class TypeSerializer {
-
+    static final DateTimeFormatter ISO_WITH_3MS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
     private static final Map<Class<?>, String> TYPE_MARKERS = new ConcurrentHashMap<>();
 
     static {
@@ -60,12 +60,12 @@ public class TypeSerializer {
         if (value instanceof Long l) return Long.toString(l);
         if (value instanceof Short s) return Short.toString(s);
         if (value instanceof Byte b) return Byte.toString(b);
-        if (value instanceof Float f) return Float.toString(f);
-        if (value instanceof Double d) return Double.toString(d);
+        if (value instanceof Float f) return EcmaDoubleFormatter.format(f);
+        if (value instanceof Double d) return EcmaDoubleFormatter.format(d);
         if (value instanceof BigDecimal bd) return bd.toPlainString();
         if (value instanceof Boolean b) return Boolean.toString(b);
         if (value instanceof LocalDate ld) return ld.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        if (value instanceof LocalDateTime ldt) return ldt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        if (value instanceof LocalDateTime ldt) return ldt.format(ISO_WITH_3MS);
         if (value instanceof Enum<?> e) return e.getDeclaringClass().getName() + ":" + e.name();
         if (value instanceof byte[] bytes) return Base64.getEncoder().encodeToString(bytes);
         throw new UnsupportedTypeException("Unsupported type for serialization: " + value.getClass().getName());

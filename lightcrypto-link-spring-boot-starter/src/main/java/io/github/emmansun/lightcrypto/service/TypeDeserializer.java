@@ -36,7 +36,13 @@ public class TypeDeserializer {
             case "DEC" -> new BigDecimal(value);
             case "BOOL" -> Boolean.parseBoolean(value);
             case "LDATE" -> LocalDate.parse(value, DateTimeFormatter.ISO_LOCAL_DATE);
-            case "LDT" -> LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            case "LDT" -> {
+                if (value.length() == 19) {
+                    // Handle legacy ISO_LOCAL_DATE_TIME format without milliseconds
+                    yield LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                }
+                yield LocalDateTime.parse(value, TypeSerializer.ISO_WITH_3MS);
+            }
             case "BYTES" -> Base64.getDecoder().decode(value);
             default -> {
                 if (typeMarker.startsWith("ENUM:")) {
