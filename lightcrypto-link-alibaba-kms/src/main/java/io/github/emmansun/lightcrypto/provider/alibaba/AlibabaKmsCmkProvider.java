@@ -2,6 +2,7 @@ package io.github.emmansun.lightcrypto.provider.alibaba;
 
 import io.github.emmansun.lightcrypto.exception.CryptoException;
 import io.github.emmansun.lightcrypto.model.GeneratedKey;
+import io.github.emmansun.lightcrypto.model.LclAlgorithms;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.provider.alibaba.AlibabaKmsCmkProperties.Mode;
@@ -36,9 +37,6 @@ import java.util.Objects;
 public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     private static final String PROVIDER_ID = "alibaba-kms";
-
-    /** WrappedKey algorithm identifier for RSA-OAEP wrapping. */
-    static final String ALGORITHM_RSA_OAEP_SHA256 = "RSAES-OAEP-SHA256";
 
     /** Alibaba KMS AsymmetricDecrypt API Algorithm parameter value for RSA-OAEP. */
     private static final String KMS_ALGORITHM_RSA = "RSAES_OAEP_SHA_256";
@@ -123,6 +121,23 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
     }
 
     @Override
+    public boolean supportsAlgorithm(String lclAlgorithm) {
+        return LclAlgorithms.RSA_OAEP_256.equals(lclAlgorithm) 
+            || LclAlgorithms.KMS_DATA_KEY.equals(lclAlgorithm);
+    }
+
+        @Override
+    public String mapAlgorithm(String lclAlgorithm) {
+        if (lclAlgorithm == null) return null;
+        
+        return switch (lclAlgorithm) {
+            case LclAlgorithms.RSA_OAEP_256 -> KMS_ALGORITHM_RSA; 
+            case LclAlgorithms.KMS_DATA_KEY -> KMS_DATA_KEY;
+            default -> lclAlgorithm;
+        };
+    }
+
+    @Override
     public GeneratedKey generateKey(int keyLength) {
         if (mode == Mode.ASYMMETRIC) {
             return CmkProvider.super.generateKey(keyLength);
@@ -155,7 +170,7 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
             byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
             byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
 
-            return new GeneratedKey(plaintext, new WrappedKey(ciphertext, KMS_DATA_KEY, Map.of("keyVersionId", response.getBody().getKeyVersionId())));
+            return new GeneratedKey(plaintext, new WrappedKey(ciphertext, LclAlgorithms.KMS_DATA_KEY, Map.of("keyVersionId", response.getBody().getKeyVersionId())));
         } catch (Exception e) {
             throw new CryptoException("KMS GenerateDataKey failed for keyId=" + keyId, e);
         }
@@ -174,6 +189,12 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     @Override
     public byte[] unwrap(WrappedKey wrappedKey) {
+        if (wrappedKey == null) {
+            throw new IllegalArgumentException("WrappedKey must not be null");
+        }
+        if (!supportsAlgorithm(wrappedKey.algorithm())) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + wrappedKey.algorithm());
+        }
         if (mode == Mode.SYMMETRIC) {
             return unwrapSymmetric(wrappedKey);
         }
@@ -181,11 +202,6 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
     }
 
     private byte[] unwrapSymmetric(WrappedKey wrappedKey) {
-        if (!KMS_DATA_KEY.equals(wrappedKey.algorithm())) {
-            throw new IllegalArgumentException(
-                    "Unexpected WrappedKey algorithm: '" + wrappedKey.algorithm()
-                            + "'. Expected: " + KMS_DATA_KEY);
-        }
         try {
             String ciphertextBlob = Base64.getEncoder().encodeToString(wrappedKey.ciphertext());
 
@@ -207,7 +223,7 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
 
     private byte[] unwrapAsymmetric(WrappedKey wrappedKey) {
         try {
-            String kmsAlgorithm = mapToKmsAlgorithm(wrappedKey.algorithm());
+            String kmsAlgorithm = mapAlgorithm(wrappedKey.algorithm());
             String ciphertextBlob = Base64.getEncoder().encodeToString(wrappedKey.ciphertext());
 
             com.aliyun.kms20160120.models.AsymmetricDecryptRequest request =
@@ -235,21 +251,9 @@ public final class AlibabaKmsCmkProvider implements CmkProvider {
             Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding");
             cipher.init(Cipher.ENCRYPT_MODE, publicKey, RSA_OAEP_SPEC);
             byte[] ciphertext = cipher.doFinal(plaintextKey);
-            return new WrappedKey(ciphertext, ALGORITHM_RSA_OAEP_SHA256, Map.of(CmkProvider.META_CMK_VERSION, keyVersionId));
+            return new WrappedKey(ciphertext, LclAlgorithms.RSA_OAEP_256, Map.of(CmkProvider.META_CMK_VERSION, keyVersionId));
         } catch (Exception e) {
             throw new CryptoException("RSA-OAEP wrap failed", e);
         }
-    }
-
-    private static String mapToKmsAlgorithm(String wrappedAlgorithm) {
-        if (ALGORITHM_RSA_OAEP_SHA256.equals(wrappedAlgorithm)) {
-            return KMS_ALGORITHM_RSA;
-        }
-        if ("SM2PKE".equals(wrappedAlgorithm)) {
-            return "SM2PKE";
-        }
-        throw new IllegalArgumentException(
-                "Unknown WrappedKey algorithm: '" + wrappedAlgorithm
-                        + "'. Expected RSAES-OAEP-SHA256 or SM2PKE");
     }
 }

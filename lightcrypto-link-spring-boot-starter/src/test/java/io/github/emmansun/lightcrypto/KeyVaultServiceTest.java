@@ -335,6 +335,16 @@ class KeyVaultServiceTest {
         }
 
         @Override
+        public boolean supportsAlgorithm(String lclAlgorithm) {
+            return "IDENTITY".equals(lclAlgorithm);
+        }
+
+        @Override
+        public String mapAlgorithm(String lclAlgorithm) {
+            return "IDENTITY";
+        }
+        
+        @Override
         public WrappedKey wrap(byte[] plaintextKey) {
             return new WrappedKey(plaintextKey.clone(), "IDENTITY");
         }

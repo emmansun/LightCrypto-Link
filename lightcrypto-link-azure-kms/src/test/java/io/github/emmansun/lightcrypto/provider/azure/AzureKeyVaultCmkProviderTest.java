@@ -3,8 +3,6 @@ package io.github.emmansun.lightcrypto.provider.azure;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.KeyClientBuilder;
-import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
-import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
 import com.azure.security.keyvault.keys.models.JsonWebKey;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import org.junit.jupiter.api.BeforeAll;

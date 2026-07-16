@@ -77,6 +77,9 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
         if (wrappedKey == null) {
             throw new IllegalArgumentException("WrappedKey must not be null");
         }
+        if (!supportsAlgorithm(wrappedKey.algorithm())) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + wrappedKey.algorithm());
+        }
         try {
             String cmkVersion = wrappedKey.metadata().get(CmkProvider.META_CMK_VERSION);
             if (cmkVersion == null || cmkVersion.isEmpty()) {
@@ -98,6 +101,16 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
     @Override
     public String getPublicReference() {
         return keyName;
+    }
+
+    @Override
+    public boolean supportsAlgorithm(String lclAlgorithm) {
+        return KeyWrapAlgorithm.RSA_OAEP_256.toString().equals(lclAlgorithm);
+    }
+
+    @Override
+    public String mapAlgorithm(String lclAlgorithm) {
+        return lclAlgorithm; 
     }
 
     /** Returns the auto-resolved key version. */

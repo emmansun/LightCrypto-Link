@@ -21,6 +21,17 @@ public interface CmkProvider {
     String getPublicReference();
 
     /**
+     * Checks if this KMS provider supports the standard LCL algorithm string (e.g., "RSA-OAEP-256").
+     */
+    boolean supportsAlgorithm(String lclAlgorithm);
+
+    /**
+     * Translates LCL standard algorithm name to the provider's specific driver/SDK notation.
+     * E.g., "RSA-OAEP-256" -> "RSAES_OAEP_SHA_256" for Alibaba Cloud.
+     */
+    String mapAlgorithm(String lclAlgorithm);
+
+    /**
      * Wrap raw key material using the CMK.
      */
     WrappedKey wrap(byte[] plaintextKey);

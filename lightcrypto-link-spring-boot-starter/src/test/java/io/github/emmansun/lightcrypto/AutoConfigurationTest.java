@@ -77,6 +77,16 @@ class AutoConfigurationTest {
                 }
 
                 @Override
+                public boolean supportsAlgorithm(String lclAlgorithm) {
+                    return "IDENTITY".equals(lclAlgorithm);
+                }
+
+                @Override
+                public String mapAlgorithm(String lclAlgorithm) {
+                    return "IDENTITY";
+                }
+
+                @Override
                 public WrappedKey wrap(byte[] keyMaterial) {
                     return new WrappedKey(keyMaterial, "custom-wrap");
                 }

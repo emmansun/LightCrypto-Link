@@ -3,8 +3,6 @@ package io.github.emmansun.lightcrypto.provider.azure;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.KeyClientBuilder;
-import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
-import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,7 +11,6 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.security.PublicKey;
 import java.security.SecureRandom;
-import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

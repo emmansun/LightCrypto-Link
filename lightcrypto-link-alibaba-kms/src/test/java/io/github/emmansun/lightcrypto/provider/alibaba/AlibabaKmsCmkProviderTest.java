@@ -37,7 +37,7 @@ class AlibabaKmsCmkProviderTest {
 
         WrappedKey wrapped = provider.wrap(plaintextKey);
 
-        assertThat(wrapped.algorithm()).isEqualTo("RSAES-OAEP-SHA256");
+        assertThat(wrapped.algorithm()).isEqualTo("RSA-OAEP-256");
         assertThat(wrapped.ciphertext()).isNotEmpty();
         // RSA-2048 OAEP ciphertext is 256 bytes
         assertThat(wrapped.ciphertext()).hasSize(256);
@@ -126,7 +126,7 @@ class AlibabaKmsCmkProviderTest {
         AlibabaKmsCmkProvider provider = new AlibabaKmsCmkProvider(
                 "key-test", "ver-test", rsaKeyPair.getPublic(), new SuccessfulDecryptClient());
 
-        byte[] plaintext = provider.unwrap(new WrappedKey(new byte[]{9, 9, 9}, "RSAES-OAEP-SHA256"));
+        byte[] plaintext = provider.unwrap(new WrappedKey(new byte[]{9, 9, 9}, "RSA-OAEP-256"));
 
         assertThat(plaintext).containsExactly((byte) 1, (byte) 2, (byte) 3);
         }
@@ -136,8 +136,8 @@ class AlibabaKmsCmkProviderTest {
         AlibabaKmsCmkProvider provider = createProvider();
 
         assertThatThrownBy(() -> provider.unwrap(new WrappedKey(new byte[]{1}, "UNKNOWN")))
-            .isInstanceOf(CryptoException.class)
-            .hasMessageContaining("KMS AsymmetricDecrypt failed");
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported algorithm: UNKNOWN");
         }
 
         @Test
@@ -145,7 +145,7 @@ class AlibabaKmsCmkProviderTest {
         AlibabaKmsCmkProvider provider = new AlibabaKmsCmkProvider(
                 "key-test", "ver-test", rsaKeyPair.getPublic(), new FailingDecryptClient());
 
-        assertThatThrownBy(() -> provider.unwrap(new WrappedKey(new byte[]{1, 2}, "RSAES-OAEP-SHA256")))
+        assertThatThrownBy(() -> provider.unwrap(new WrappedKey(new byte[]{1, 2}, "RSA-OAEP-256")))
             .isInstanceOf(CryptoException.class)
             .hasMessageContaining("KMS AsymmetricDecrypt failed");
         }

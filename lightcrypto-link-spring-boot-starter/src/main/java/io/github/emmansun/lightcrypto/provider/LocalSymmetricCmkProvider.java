@@ -1,6 +1,7 @@
 package io.github.emmansun.lightcrypto.provider;
 
 import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.model.LclAlgorithms;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 
 import javax.crypto.Cipher;
@@ -49,6 +50,16 @@ public final class LocalSymmetricCmkProvider implements CmkProvider {
     }
 
     @Override
+    public boolean supportsAlgorithm(String lclAlgorithm) {
+        return LclAlgorithms.AES_256_GCM.equals(lclAlgorithm);
+    }
+
+    @Override
+    public String mapAlgorithm(String lclAlgorithm) {
+        return lclAlgorithm; 
+    }
+
+    @Override
     public WrappedKey wrap(byte[] plaintextKey) {
         try {
             byte[] iv = new byte[IV_LENGTH];
@@ -66,7 +77,7 @@ public final class LocalSymmetricCmkProvider implements CmkProvider {
             System.arraycopy(iv, 0, combined, 0, IV_LENGTH);
             System.arraycopy(ciphertext, 0, combined, IV_LENGTH, ciphertext.length);
 
-            return new WrappedKey(combined, ALGORITHM);
+            return new WrappedKey(combined, LclAlgorithms.AES_256_GCM);
         } catch (Exception e) {
             throw new CryptoException("Failed to wrap key", e);
         }
@@ -74,6 +85,12 @@ public final class LocalSymmetricCmkProvider implements CmkProvider {
 
     @Override
     public byte[] unwrap(WrappedKey wrappedKey) {
+        if (wrappedKey == null) {
+            throw new IllegalArgumentException("WrappedKey must not be null");
+        }
+        if (!supportsAlgorithm(wrappedKey.algorithm())) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + wrappedKey.algorithm());
+        }
         try {
             byte[] data = wrappedKey.ciphertext();
             byte[] iv = new byte[IV_LENGTH];
