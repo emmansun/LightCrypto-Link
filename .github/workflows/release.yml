@@ -60,11 +60,11 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            lightcrypto-link-spi/target/*.jar
-            lightcrypto-link-spring-boot-starter/target/*.jar
-            lightcrypto-link-spring-boot-starter-jdk/target/*.jar
-            lightcrypto-link-azure-kms/target/*.jar
-            lightcrypto-link-alibaba-kms/target/*.jar
+            lcl-spi/target/*.jar
+            lcl-core/target/*.jar
+            lcl-spring-boot-starter/target/*.jar
+            lcl-provider-azure-kms/target/*.jar
+            lcl-provider-alibaba-kms/target/*.jar
 
   deploy-central:
     runs-on: ubuntu-latest
@@ -101,7 +101,7 @@ jobs:
         run: mvn -B -N install -DskipTests
 
       - name: Deploy to Maven Central
-        run: mvn -B clean deploy -DskipTests -Pcentral -pl .,lightcrypto-link-spi,lightcrypto-link-spring-boot-starter,lightcrypto-link-spring-boot-starter-jdk,lightcrypto-link-azure-kms,lightcrypto-link-alibaba-kms
+        run: mvn -B clean deploy -DskipTests -Pcentral -pl .,lcl-spi,lcl-core,lcl-spring-boot-starter,lcl-provider-azure-kms,lcl-provider-alibaba-kms
         env:
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}

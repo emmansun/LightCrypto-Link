@@ -5,12 +5,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.emmansun</groupId>
-    <artifactId>lightcrypto-link-parent</artifactId>
+    <artifactId>lcl-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>LightCrypto-Link (Parent)</name>
-    <description>A pure Java, lightweight application-level field encryption component with blind index and multi-KMS/SM-crypto support for Spring Boot MongoDB.</description>
+    <name>LCL (Parent)</name>
+    <description>Light Crypto Link — a cross-language, cross-cloud application-level field encryption platform.</description>
     <url>https://github.com/emmansun/LightCrypto-Link</url>
 
     <developers>
@@ -37,12 +37,12 @@
     </licenses>
 
     <modules>
-        <module>lightcrypto-link-spi</module>
-        <module>lightcrypto-link-spring-boot-starter</module>
-        <module>lightcrypto-link-spring-boot-starter-jdk</module>
-        <module>lightcrypto-link-azure-kms</module>
-        <module>lightcrypto-link-alibaba-kms</module>
-        <module>lightcrypto-link-examples</module>
+        <module>lcl-spi</module>
+        <module>lcl-core</module>
+        <module>lcl-spring-boot-starter</module>
+        <module>lcl-provider-azure-kms</module>
+        <module>lcl-provider-alibaba-kms</module>
+        <module>lcl-examples</module>
     </modules>
 
     <properties>
@@ -76,27 +76,27 @@
         <dependencies>
             <dependency>
                 <groupId>io.github.emmansun</groupId>
-                <artifactId>lightcrypto-link-spi</artifactId>
+                <artifactId>lcl-spi</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.emmansun</groupId>
-                <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+                <artifactId>lcl-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.emmansun</groupId>
-                <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
+                <artifactId>lcl-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.emmansun</groupId>
-                <artifactId>lightcrypto-link-alibaba-kms</artifactId>
+                <artifactId>lcl-provider-alibaba-kms</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.emmansun</groupId>
-                <artifactId>lightcrypto-link-azure-kms</artifactId>
+                <artifactId>lcl-provider-azure-kms</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

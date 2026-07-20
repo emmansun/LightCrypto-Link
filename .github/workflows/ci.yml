@@ -38,14 +38,14 @@ jobs:
       - name: Build & Test
         run: mvn -B clean verify
 
-      - name: Install SPI Artifact for Module-Scoped Checks
-        run: mvn -B -pl lightcrypto-link-spi -am -DskipTests install
+      - name: Install Core Artifacts for Module-Scoped Checks
+        run: mvn -B -pl lcl-spi,lcl-core -am -DskipTests install
 
       - name: Checkstyle
-        run: mvn -B -pl lightcrypto-link-spring-boot-starter checkstyle:check
+        run: mvn -B -pl lcl-spring-boot-starter checkstyle:check
 
       - name: SpotBugs
-        run: mvn -B -pl lightcrypto-link-spring-boot-starter com.github.spotbugs:spotbugs-maven-plugin:4.10.2.0:check
+        run: mvn -B -pl lcl-spring-boot-starter com.github.spotbugs:spotbugs-maven-plugin:4.10.3.0:check
 
       - name: Upload JaCoCo Report
         if: always()

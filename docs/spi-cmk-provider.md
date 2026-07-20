@@ -8,8 +8,11 @@ LCL provides a CMK SPI so you can integrate custom key-management systems.
 public interface CmkProvider {
     String getProviderId();
     String getPublicReference();
+    boolean supportsAlgorithm(String lclAlgorithm);
+    String mapAlgorithm(String lclAlgorithm);
     WrappedKey wrap(byte[] plaintextKey);
     byte[] unwrap(WrappedKey wrappedKey);
+    default GeneratedKey generateKey(int lengthInBytes) { ... }
 }
 ```
 

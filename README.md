@@ -37,7 +37,7 @@ Deep docs are in [docs](docs/):
 - Blind index query rewrite for exact-match queries
 - Nested object and collection/map encryption
 - Whole-object mode for container confidentiality
-- Per-entity multi-DEK vault with versioned `kid`
+- Per-namespace multi-DEK vault with versioned `kid` and Wire Format V1 self-describing blobs
 - Pluggable CMK providers (local, Azure Key Vault, Alibaba Cloud KMS)
 
 ## Quick Start
@@ -57,22 +57,12 @@ How to get latest stable version:
 - Check the Maven Central badge at the top of this README.
 - Or open: https://central.sonatype.com/artifact/io.github.emmansun/lightcrypto-link-spring-boot-starter
 
-Prefer JDK-only starter for lighter footprint:
+Add the starter dependency:
 
 ```xml
 <dependency>
   <groupId>io.github.emmansun</groupId>
-  <artifactId>lightcrypto-link-spring-boot-starter-jdk</artifactId>
-  <version>${lcl.version}</version>
-</dependency>
-```
-
-Or full starter:
-
-```xml
-<dependency>
-  <groupId>io.github.emmansun</groupId>
-  <artifactId>lightcrypto-link-spring-boot-starter</artifactId>
+  <artifactId>lcl-spring-boot-starter</artifactId>
   <version>${lcl.version}</version>
 </dependency>
 ```
@@ -98,14 +88,14 @@ Cloud KMS modules:
 <!-- Azure Key Vault -->
 <dependency>
   <groupId>io.github.emmansun</groupId>
-  <artifactId>lightcrypto-link-azure-kms</artifactId>
+  <artifactId>lcl-provider-azure-kms</artifactId>
   <version>${lcl.version}</version>
 </dependency>
 
 <!-- Alibaba Cloud KMS -->
 <dependency>
   <groupId>io.github.emmansun</groupId>
-  <artifactId>lightcrypto-link-alibaba-kms</artifactId>
+  <artifactId>lcl-provider-alibaba-kms</artifactId>
   <version>${lcl.version}</version>
 </dependency>
 ```
@@ -174,23 +164,23 @@ Object plain = programmaticCryptoService.decryptValue(encrypted);
 Key rotation API is:
 
 ```java
-keyVaultService.rotateDek(User.class);
+keyVaultService.rotateDek("default.default.User#phone");
 ```
 
 For behavior details, see [docs/architecture.md](docs/architecture.md).
 
 ## Examples
 
-See [lightcrypto-link-examples](lightcrypto-link-examples/) for runnable demos:
+See [lcl-examples](lcl-examples/) for runnable demos:
 
 ```bash
-cd lightcrypto-link-examples/basic-crud
+cd lcl-examples/basic-crud
 mvn spring-boot:run
 
-cd lightcrypto-link-examples/azure-keyvault
+cd lcl-examples/azure-keyvault
 mvn spring-boot:run
 
-cd lightcrypto-link-examples/alibaba-kms
+cd lcl-examples/alibaba-kms
 mvn spring-boot:run
 ```
 
@@ -206,15 +196,16 @@ mvn clean verify
 
 ```text
 LightCrypto-Link/
-|- lightcrypto-link-spi/                     # SPI contracts
-|- lightcrypto-link-spring-boot-starter/     # Core starter
-|- lightcrypto-link-spring-boot-starter-jdk/ # JDK-only starter
-|- lightcrypto-link-azure-kms/               # Azure Key Vault provider
-|- lightcrypto-link-alibaba-kms/             # Alibaba Cloud KMS provider
-|- lightcrypto-link-examples/                # Example applications
+|- lcl-spi/                              # SPI contracts (CmkProvider, WrappedKey, VaultStore)
+|- lcl-core/                             # Pure crypto core (Wire Format V1, CryptoCodec, BlindIndexEngine, KCV)
+|- lcl-spring-boot-starter/              # Core starter (annotation-driven encryption)
+|- lcl-provider-azure-kms/               # Azure Key Vault CMK provider
+|- lcl-provider-alibaba-kms/             # Alibaba Cloud KMS CMK provider
+|- lcl-examples/                         # Example applications
 |  |- basic-crud/
 |  |- azure-keyvault/
 |  `- alibaba-kms/
+|- vectors/                              # Golden test vectors (cross-language verification)
 `- docs/
 ```
 

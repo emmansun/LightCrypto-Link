@@ -9,6 +9,8 @@ This document contains the full configuration reference for LCL.
 | `lcl.crypto.enabled` | `boolean` | `true` | Enable/disable encryption globally |
 | `lcl.crypto.cmk` | `String` | none | 64-hex-char CMK (32 bytes) for local symmetric provider |
 | `lcl.crypto.algorithm` | `SymmetricAlgorithm` | `AES_256_GCM` | Global default algorithm for `@Encrypted` |
+| `lcl.crypto.tenant` | `String` | `default` | Tenant segment of the namespace (multi-tenant isolation) |
+| `lcl.crypto.realm` | `String` | `default` | Realm segment of the namespace (key domain isolation) |
 | `lcl.crypto.keyVaultDatabase` | `String` | app database | MongoDB database holding `__lcl_keyvault` |
 | `lcl.crypto.autoInit` | `boolean` | `true` | Auto-create vault on first startup |
 | `lcl.crypto.cacheTtl` | `Duration` | `PT1H` (1 hour) | TTL for the in-memory DEK/HMAC key cache. After expiry, keys are securely zeroed and reloaded from MongoDB. Set `PT0S` to disable caching. |
@@ -71,4 +73,4 @@ lcl:
 
 - Never commit credentials or raw CMK values.
 - Use environment variables, K8s Secrets, or external config services.
-- Rotate DEKs periodically with `keyVaultService.rotateDek(EntityClass.class)`.
+- Rotate DEKs periodically with `keyVaultService.rotateDek(namespace)`.

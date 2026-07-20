@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rt-aes-256-gcm",
+    "algorithm": "AES_256_GCM",
+    "algorithmId": 1,
+    "input": {
+      "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "plaintextHex": "726f756e64747269702d4145535f3235365f47434d",
+      "namespace": "default.default.Test#AES_256_GCM",
+      "dekVersion": 1
+    },
+    "expected": {
+      "wireFormatBase64url": "AQEAIGRlZmF1bHQuZGVmYXVsdC5UZXN0I0FFU18yNTZfR0NNAAAAAQy96avDZH3ezP_Oe5sAABM2ov3VTgUGYB0nOLiQW71nyt1BP_RE1IEAK7cxET7BkKz5GUQ",
+      "roundtripOk": true
+    }
+  },
+  {
+    "id": "rt-aes-256-cbc",
+    "algorithm": "AES_256_CBC",
+    "algorithmId": 2,
+    "input": {
+      "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "plaintextHex": "726f756e64747269702d4145535f3235365f434243",
+      "namespace": "default.default.Test#AES_256_CBC",
+      "dekVersion": 1
+    },
+    "expected": {
+      "wireFormatBase64url": "AQIAIGRlZmF1bHQuZGVmYXVsdC5UZXN0I0FFU18yNTZfQ0JDAAAAARBdH4IrQmjXLgVWWyl7lwIZAAADuBRugRzUMP360GtM-H9YOyiD-mmectADwRt-wIBVRQ",
+      "roundtripOk": true
+    }
+  },
+  {
+    "id": "rt-sm4-gcm",
+    "algorithm": "SM4_GCM",
+    "algorithmId": 3,
+    "input": {
+      "keyHex": "000102030405060708090a0b0c0d0e0f",
+      "plaintextHex": "726f756e64747269702d534d345f47434d",
+      "namespace": "default.default.Test#SM4_GCM",
+      "dekVersion": 1
+    },
+    "expected": {
+      "wireFormatBase64url": "AQMAHGRlZmF1bHQuZGVmYXVsdC5UZXN0I1NNNF9HQ00AAAABDL6FUbHKhvA-8picsAAAtBBkpqGv4am_RqwiNhTPnxS2WnkOqtLbKuzz0We8Gr58",
+      "roundtripOk": true
+    }
+  },
+  {
+    "id": "rt-sm4-cbc",
+    "algorithm": "SM4_CBC",
+    "algorithmId": 4,
+    "input": {
+      "keyHex": "000102030405060708090a0b0c0d0e0f",
+      "plaintextHex": "726f756e64747269702d534d345f434243",
+      "namespace": "default.default.Test#SM4_CBC",
+      "dekVersion": 1
+    },
+    "expected": {
+      "wireFormatBase64url": "AQQAHGRlZmF1bHQuZGVmYXVsdC5UZXN0I1NNNF9DQkMAAAABEFZh6Fz9STX5ZqeOC9acry0AAIOeAiWhn8ppdRtdmdBGIgIodHPMAGCth8scKqS1pU29",
+      "roundtripOk": true
+    }
+  }
+]
