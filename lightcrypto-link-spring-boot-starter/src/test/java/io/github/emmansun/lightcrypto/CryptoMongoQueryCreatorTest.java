@@ -134,4 +134,68 @@ class CryptoMongoQueryCreatorTest extends LclTestBase {
         assertThat(r.getQueryObject().containsKey("phone.b")).isTrue();
         assertThat(r.getQueryObject().containsKey("phone")).isFalse();
     }
+
+    @Test
+    void orOperatorRewritesEncryptedFieldsInside() {
+        Query q = new Query(new Criteria().orOperator(
+                Criteria.where("phone").is("13800138000"),
+                Criteria.where("phone").is("13900139000")));
+        Query r = qc.rewrite(q, TestUser.class);
+        Document doc = r.getQueryObject();
+        List<?> orList = (List<?>) doc.get("$or");
+        assertThat(orList).hasSize(2);
+        Document first = (Document) orList.get(0);
+        assertThat(first.containsKey("phone.b")).isTrue();
+        assertThat(first.containsKey("phone")).isFalse();
+    }
+
+    @Test
+    void unsupportedOperatorOnEncryptedFieldThrows() {
+        Query q = new Query(Criteria.where("phone").gt("138"));
+        assertThatThrownBy(() -> qc.rewrite(q, TestUser.class))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("Unsupported query operation");
+    }
+
+    @Test
+    void nonEncryptedEntityQueryPassesThrough() {
+        Query q = new Query(Criteria.where("name").is("John"));
+        Query r = qc.rewrite(q, io.github.emmansun.lightcrypto.testmodel.TestPlainEntity.class);
+        assertThat(r.getQueryObject()).isEqualTo(q.getQueryObject());
+    }
+
+    @Test
+    void numericValueOnEncryptedFieldIsHashed() {
+        // TestEmployee.age is @Encrypted(blindIndex=false), so it throws
+        // Use TestUser phone with a numeric-like string to verify Number path
+        Query q = new Query(Criteria.where("phone").is(13800138000L));
+        Query r = qc.rewrite(q, TestUser.class);
+        Document doc = r.getQueryObject();
+        assertThat(doc.containsKey("phone.b")).isTrue();
+        assertThat(doc.get("phone.b")).isInstanceOf(String.class);
+    }
+
+    @Test
+    void booleanValueOnEncryptedFieldIsHashed() {
+        Query q = new Query(Criteria.where("phone").is(true));
+        Query r = qc.rewrite(q, TestUser.class);
+        Document doc = r.getQueryObject();
+        assertThat(doc.containsKey("phone.b")).isTrue();
+    }
+
+    @Test
+    void ascendingSortIsPreserved() {
+        Query q = new Query(Criteria.where("phone").is("13800138000"));
+        q.with(Sort.by(Sort.Direction.ASC, "name"));
+
+        Query r = qc.rewrite(q, TestUser.class);
+        assertThat(r.getSortObject()).isEqualTo(new Document("name", 1));
+    }
+
+    @Test
+    void unsortedQueryHasNoSort() {
+        Query q = new Query(Criteria.where("phone").is("13800138000"));
+        Query r = qc.rewrite(q, TestUser.class);
+        assertThat(r.getSortObject().isEmpty()).isTrue();
+    }
 }

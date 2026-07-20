@@ -423,4 +423,173 @@ class EntityMetadataCacheTest {
 
     static class TestInheritedEncryptedEntity extends TestBaseEncryptedEntity {
     }
+
+    // --- Additional coverage: static fields, isPojoType edge cases, nested encrypted in collections/maps ---
+
+    static class TestWithStaticField {
+        @Encrypted
+        private String phone;
+
+        @Encrypted
+        private static String staticSecret = "should-be-ignored";
+    }
+
+    @Test
+    void staticEncryptedFieldIsSkipped() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWithStaticField.class);
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestWithJavaTimeField {
+        @Encrypted
+        private String phone;
+
+        // java.time type nested POJO field should NOT be recursed into
+        private java.time.Instant timestamp;
+    }
+
+    @Test
+    void javaTimeFieldIsNotTreatedAsPojo() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWithJavaTimeField.class);
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestWithArrayAndEnumFields {
+        @Encrypted
+        private String phone;
+
+        private byte[] data;
+        private Thread.State state;
+        private int[] numbers;
+    }
+
+    @Test
+    void arrayAndEnumFieldsAreNotTreatedAsPojo() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWithArrayAndEnumFields.class);
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestWholeObjectWithNestedEncryptedInCollection {
+        @Encrypted
+        private List<InnerWithEncrypted> items;
+
+        static class InnerWithEncrypted {
+            @Encrypted
+            private String secret;
+        }
+    }
+
+    @Test
+    void wholeObjectCollectionWithNestedEncryptedInElementRejected() {
+        // AUTO mode on POJO collection => wholeObject=true, but inner has @Encrypted => conflict
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestWholeObjectWithNestedEncryptedInCollection.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("whole-object encryption");
+    }
+
+    static class TestWholeObjectWithNestedEncryptedInMap {
+        @Encrypted
+        private java.util.Map<String, InnerMapWithEncrypted> entries;
+
+        static class InnerMapWithEncrypted {
+            @Encrypted
+            private String secret;
+        }
+    }
+
+    @Test
+    void wholeObjectMapWithNestedEncryptedInValueRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestWholeObjectWithNestedEncryptedInMap.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("whole-object encryption");
+    }
+
+    static class TestCollectionWithNonPojoElement {
+        // Collection of String (non-POJO) without @Encrypted should not recurse
+        private List<String> plainTags;
+
+        @Encrypted
+        private String phone;
+    }
+
+    @Test
+    void nonEncryptedCollectionOfScalarsIsIgnored() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestCollectionWithNonPojoElement.class);
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestMapWithNonPojoValue {
+        // Map of String->String (non-POJO value) without @Encrypted should not recurse
+        private java.util.Map<String, String> plainSettings;
+
+        @Encrypted
+        private String phone;
+    }
+
+    @Test
+    void nonEncryptedMapOfScalarsIsIgnored() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestMapWithNonPojoValue.class);
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestNestedPojoWithoutEncryptedFields {
+        private InnerPojo inner;
+
+        @Encrypted
+        private String phone;
+
+        static class InnerPojo {
+            private String value; // no @Encrypted
+        }
+    }
+
+    @Test
+    void nestedPojoWithoutEncryptedFieldsProducesNoExtraMetadata() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestNestedPojoWithoutEncryptedFields.class);
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestDbRefFieldDirect {
+        @org.springframework.data.mongodb.core.mapping.DBRef
+        @Encrypted
+        private String refField;
+
+        @Encrypted
+        private String phone;
+    }
+
+    @Test
+    void dbRefAnnotatedEncryptedFieldIsExcluded() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestDbRefFieldDirect.class);
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
+    }
+
+    static class TestMapWithWildcardValueType {
+        @Encrypted
+        private java.util.Map<String, ?> wildcardMap;
+    }
+
+    @Test
+    void mapWithWildcardValueTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestMapWithWildcardValueType.class))
+                .isInstanceOf(UnsupportedTypeException.class);
+    }
+
+    static class TestCollectionWithWildcardElementType {
+        @Encrypted
+        private List<?> wildcardList;
+    }
+
+    @Test
+    void collectionWithWildcardElementTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestCollectionWithWildcardElementType.class))
+                .isInstanceOf(UnsupportedTypeException.class);
+    }
 }

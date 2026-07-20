@@ -8,6 +8,7 @@ import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeSerializer;
 import io.github.emmansun.lightcrypto.testmodel.TestArticle;
 import io.github.emmansun.lightcrypto.testmodel.TestEmployee;
+import io.github.emmansun.lightcrypto.testmodel.TestPlainEntity;
 import io.github.emmansun.lightcrypto.testmodel.TestUser;
 import io.github.emmansun.lightcrypto.testmodel.TestUserWithAddresses;
 import io.github.emmansun.lightcrypto.testmodel.TestUserWithWholeAddress;
@@ -19,6 +20,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.mongodb.core.mapping.event.BeforeSaveEvent;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -193,5 +197,134 @@ class CryptoBeforeSaveListenerTest extends LclTestBase {
         Document settingsSub = (Document) doc.get("settings");
         assertThat(settingsSub.get("c")).isInstanceOf(Binary.class);
         assertThat(settingsSub.getString("_t")).isEqualTo("MAP");
+    }
+
+    @Test
+    void entityWithoutEncryptedFieldsIsSkipped() {
+        TestPlainEntity entity = new TestPlainEntity();
+        entity.setName("plain");
+        Document doc = new Document("name", "plain");
+        listener.onBeforeSave(new BeforeSaveEvent<>(entity, doc, "col"));
+        assertThat(doc.getString("name")).isEqualTo("plain");
+    }
+
+    @Test
+    void listWithNullItemsSkipsNulls() {
+        TestArticle article = new TestArticle();
+        List<String> tags = new ArrayList<>();
+        tags.add("java");
+        tags.add(null);
+        tags.add("spring");
+        article.setTags(tags);
+
+        Document doc = new Document();
+        doc.put("tags", new ArrayList<>(List.of("java", "placeholder", "spring")));
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(article, doc, "col"));
+
+        List<?> result = (List<?>) doc.get("tags");
+        assertThat(result).hasSize(3);
+        // First and third are encrypted sub-docs
+        assertThat(result.get(0)).isInstanceOf(Document.class);
+        assertThat(result.get(2)).isInstanceOf(Document.class);
+        // Second (null java item) remains unchanged
+        assertThat(result.get(1)).isEqualTo("placeholder");
+    }
+
+    @Test
+    void mapWithNullValueSkipsEntry() {
+        TestArticle article = new TestArticle();
+        Map<String, String> settings = new HashMap<>();
+        settings.put("theme", "dark");
+        settings.put("empty", null);
+        article.setSettings(settings);
+
+        Document mapDoc = new Document();
+        mapDoc.put("theme", "dark");
+        mapDoc.put("empty", null);
+        Document doc = new Document("settings", mapDoc);
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(article, doc, "col"));
+
+        Document resultMap = (Document) doc.get("settings");
+        // "theme" is encrypted
+        assertThat(resultMap.get("theme")).isInstanceOf(Document.class);
+        // "empty" (null value) is skipped
+        assertThat(resultMap.get("empty")).isNull();
+    }
+
+    @Test
+    void listIterWithNonListBsonValueIsSkipped() {
+        TestArticle article = new TestArticle();
+        article.setTags(List.of("java"));
+
+        Document doc = new Document();
+        doc.put("tags", "not-a-list"); // BSON is not a List
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(article, doc, "col"));
+        // Should not throw, just skip
+        assertThat(doc.get("tags")).isEqualTo("not-a-list");
+    }
+
+    @Test
+    void mapIterWithNonDocumentBsonValueIsSkipped() {
+        TestArticle article = new TestArticle();
+        article.setSettings(Map.of("theme", "dark"));
+
+        Document doc = new Document();
+        doc.put("settings", "not-a-document"); // BSON is not a Document
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(article, doc, "col"));
+        // Should not throw, just skip
+        assertThat(doc.get("settings")).isEqualTo("not-a-document");
+    }
+
+    @Test
+    void nestedListWithNonDocumentChildIsSkipped() {
+        TestUserWithAddresses user = new TestUserWithAddresses();
+        TestUserWithAddresses.Address address = new TestUserWithAddresses.Address();
+        address.setStreet("xx-road");
+        user.setAddresses(List.of(address));
+
+        // BSON list contains a non-Document element
+        Document doc = new Document("addresses", new ArrayList<>(List.of("not-a-doc")));
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(user, doc, "col"));
+        // Should not throw; non-Document child is skipped
+        List<?> result = (List<?>) doc.get("addresses");
+        assertThat(result.get(0)).isEqualTo("not-a-doc");
+    }
+
+    @Test
+    void wholeDocFieldWithNonDocumentBsonIsSkipped() {
+        TestUserWithWholeAddress user = new TestUserWithWholeAddress();
+        TestUserWithWholeAddress.Address address = new TestUserWithWholeAddress.Address();
+        address.setCity("shanghai");
+        user.setAddress(address);
+
+        // BSON value is not a Document
+        Document doc = new Document("address", "raw-string");
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(user, doc, "col"));
+        // Should not throw; non-Document BSON for whole-object is skipped
+        assertThat(doc.get("address")).isEqualTo("raw-string");
+    }
+
+    @Test
+    void nestedFieldWithNullBsonContextIsSkipped() {
+        TestUserWithAddresses user = new TestUserWithAddresses();
+        TestUserWithAddresses.Address address = new TestUserWithAddresses.Address();
+        address.setStreet("xx-road");
+        user.setAddresses(List.of(address));
+
+        // BSON list contains null
+        ArrayList<Object> bsonList = new ArrayList<>();
+        bsonList.add(null);
+        Document doc = new Document("addresses", bsonList);
+
+        listener.onBeforeSave(new BeforeSaveEvent<>(user, doc, "col"));
+        // Should not throw
+        List<?> result = (List<?>) doc.get("addresses");
+        assertThat(result).hasSize(1);
     }
 }

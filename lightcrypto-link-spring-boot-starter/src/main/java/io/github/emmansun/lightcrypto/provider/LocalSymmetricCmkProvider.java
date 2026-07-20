@@ -20,7 +20,6 @@ import java.util.HexFormat;
 public final class LocalSymmetricCmkProvider implements CmkProvider {
 
     private static final String PROVIDER_ID = "local-symmetric";
-    private static final String ALGORITHM = "AES-256-GCM";
     private static final int IV_LENGTH = 12;
     private static final int GCM_TAG_BITS = 128;
     private static final int REQUIRED_CMK_LENGTH = 32;

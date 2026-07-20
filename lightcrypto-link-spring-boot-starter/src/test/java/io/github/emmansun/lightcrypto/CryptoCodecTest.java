@@ -158,4 +158,36 @@ class CryptoCodecTest extends LclTestBase {
         String kcvExplicit = codec.computeKcv(TEST_DEK, SymmetricAlgorithm.AES_256_GCM);
         assertThat(kcv).isEqualTo(kcvExplicit);
     }
+
+    @Test
+    void defaultAlgorithmThrowsUnsupported() {
+        byte[] plaintext = "test".getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> codec.encrypt(TEST_DEK, plaintext, SymmetricAlgorithm.DEFAULT))
+                .isInstanceOf(CryptoException.class)
+                .hasMessageContaining("Unsupported algorithm");
+
+        assertThatThrownBy(() -> codec.decrypt(TEST_DEK, plaintext, SymmetricAlgorithm.DEFAULT))
+                .isInstanceOf(CryptoException.class)
+                .hasMessageContaining("Unsupported algorithm");
+
+        assertThatThrownBy(() -> codec.computeKcv(TEST_DEK, SymmetricAlgorithm.DEFAULT))
+                .isInstanceOf(CryptoException.class)
+                .hasMessageContaining("Unsupported algorithm");
+    }
+
+    @Test
+    void bindingOutputIsHexFormatted() {
+        String binding = codec.computeBinding(TEST_HMAC_KEY, TEST_DEK);
+        // HMAC-SHA-256 produces 32 bytes = 64 hex chars
+        assertThat(binding).hasSize(64);
+        assertThat(binding).matches("[0-9a-f]+");
+    }
+
+    @Test
+    void blindIndexDifferentKeysProduceDifferentHashes() {
+        byte[] otherHmacKey = generateRandomKey();
+        String h1 = codec.generateBlindIndex(TEST_HMAC_KEY, "phone", "138".getBytes(StandardCharsets.UTF_8));
+        String h2 = codec.generateBlindIndex(otherHmacKey, "phone", "138".getBytes(StandardCharsets.UTF_8));
+        assertThat(h1).isNotEqualTo(h2);
+    }
 }
