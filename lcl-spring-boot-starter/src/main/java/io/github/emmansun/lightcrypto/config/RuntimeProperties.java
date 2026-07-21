@@ -5,6 +5,8 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.Duration;
+
 /**
  * Runtime configuration properties for LightCrypto-Link.
  */
@@ -22,6 +24,12 @@ public class RuntimeProperties {
 
     /** When true, non-fatal configuration warnings are treated as errors (default: true). */
     private boolean strictMode = true;
+
+    /** Whether bootstrap diagnostics are enabled (default: true). */
+    private boolean bootstrapEnabled = true;
+
+    /** Bootstrap total timeout (default: 15s). */
+    private Duration bootstrapTimeout = Duration.ofSeconds(15);
 
     /** Runtime mode enum. */
     public enum Mode {

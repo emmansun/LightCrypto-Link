@@ -206,6 +206,36 @@ lightcrypto:
 
 See [docs/configuration.md](docs/configuration.md) for full reference.
 
+## Bootstrap Diagnostics
+
+LCL runs a self-diagnostic sequence at startup to verify cryptographic integrity before serving traffic:
+
+| Phase | Check | Failure Class |
+|-------|-------|---------------|
+| BOOT-1 | Configuration validation | FATAL |
+| BOOT-2 | SPI version check | FATAL |
+| BOOT-4 | KAT (Known Answer Test) — AES-256-GCM, SM4-GCM, AES-256-CBC, SM4-CBC, HMAC-SHA-256, HKDF | FATAL |
+| BOOT-8 | Vault reachability | RECOVERABLE |
+| BOOT-9 | KMS reachability (wrap/unwrap canary key) | RECOVERABLE |
+| BOOT-10 | Canary encrypt/decrypt roundtrip | FATAL |
+
+### Actuator Endpoints
+
+When Spring Boot Actuator is on the classpath:
+
+- `GET /actuator/lclhealth` — bootstrap status, SDK version, component health
+- `GET /actuator/lclkat` — KAT results with per-algorithm timing
+- `POST /actuator/lclkat` — on-demand KAT re-run
+
+### Configuration
+
+```yaml
+lightcrypto:
+  runtime:
+    bootstrap-enabled: true   # enable/disable bootstrap diagnostics
+    bootstrap-timeout: 15s    # max time for full bootstrap sequence
+```
+
 ## Examples
 
 See [lcl-examples](lcl-examples/) for runnable demos:

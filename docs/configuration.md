@@ -53,6 +53,8 @@ Each `ProviderEntry`:
 | `spi-version` | `int` | `1` | SPI compatibility version |
 | `mode` | `RuntimeMode` | `SPRING_BOOT` | `SPRING_BOOT`, `STANDALONE`, or `MIGRATION` |
 | `strict-mode` | `boolean` | `true` | When `true`, fail fast on configuration issues |
+| `bootstrap-enabled` | `boolean` | `true` | Enable bootstrap diagnostics (KAT, canary self-test, KMS/Vault reachability) |
+| `bootstrap-timeout` | `Duration` | `15s` | Maximum time allowed for the full bootstrap sequence |
 
 ## Observability (`lightcrypto.observability.*`)
 

@@ -1,2 +1,3 @@
 io.github.emmansun.lightcrypto.config.LightCryptoLinkAutoConfiguration
 io.github.emmansun.lightcrypto.observability.ObservabilityAutoConfiguration
+io.github.emmansun.lightcrypto.diagnostics.DiagnosticsAutoConfiguration
