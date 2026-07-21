@@ -1,0 +1,51 @@
+# LightCrypto-Link Observability Demo Configuration
+lightcrypto:
+  kms:
+    providers:
+      - id: local
+        type: LOCAL_SYMMETRIC
+        # CMK: 64 hex chars = 32-byte symmetric master key.
+        keyHex: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+
+  # Observability configuration
+  observability:
+    events:
+      enabled: true          # Enable EventBus (default: true)
+      log-level: INFO        # Slf4jEventBus log level
+    metrics:
+      enabled: true          # Enable Micrometer metrics (default: true)
+    health:
+      enabled: true          # Enable health indicator (default: true)
+
+# Embedded MongoDB (for local demo)
+de:
+  flapdoodle:
+    mongodb:
+      embedded:
+        version: 6.0.12
+
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  data:
+    mongodb:
+      database: lcl-observability-demo
+
+# Actuator endpoints exposure
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+  endpoint:
+    health:
+      show-details: always   # Show LCL component details
+  metrics:
+    tags:
+      application: lcl-observability-demo
+
+# Logging configuration to show EventBus events
+logging:
+  level:
+    io.github.emmansun.lightcrypto.observability: DEBUG
+    io.github.emmansun.lightcrypto.event: DEBUG

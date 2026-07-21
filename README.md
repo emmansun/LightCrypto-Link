@@ -219,6 +219,10 @@ mvn spring-boot:run
 
 cd lcl-examples/alibaba-kms
 mvn spring-boot:run
+
+cd lcl-examples/observability
+mvn spring-boot:run
+# Then check: GET /actuator/health, GET /actuator/metrics/lcl.crypto.encrypt
 ```
 
 ## Building from source
@@ -242,7 +246,8 @@ LightCrypto-Link/
 |- lcl-examples/                         # Example applications
 |  |- basic-crud/
 |  |- azure-keyvault/
-|  `- alibaba-kms/
+|  |- alibaba-kms/
+|  `- observability/
 |- vectors/                              # Golden test vectors (cross-language verification)
 `- docs/
 ```
