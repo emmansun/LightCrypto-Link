@@ -8,8 +8,6 @@ import org.bson.codecs.DocumentCodec;
 import org.bson.codecs.EncoderContext;
 import org.bson.io.BasicOutputBuffer;
 
-import java.util.List;
-
 /**
  * BSON implementation of {@link StructuredValueCodec}.
  *

@@ -1,6 +1,5 @@
 package io.github.emmansun.lightcrypto.adapter.mongodb.integration;
 
-import io.github.emmansun.lightcrypto.adapter.mongodb.MongoVaultStore;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import org.bson.Document;
