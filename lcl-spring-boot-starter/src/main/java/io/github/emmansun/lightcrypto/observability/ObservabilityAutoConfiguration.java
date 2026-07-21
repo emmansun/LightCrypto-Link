@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -79,6 +80,7 @@ public class ObservabilityAutoConfiguration {
     static class CompositeEventBusConfiguration {
 
         @Bean
+        @Primary
         @ConditionalOnBean({Slf4jEventBus.class})
         public EventBus compositeEventBus(ApplicationContext context) {
             List<EventBus> delegates = new ArrayList<>();
