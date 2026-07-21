@@ -13,7 +13,38 @@ This document contains the full configuration reference for LCL.
 | `lcl.crypto.realm` | `String` | `default` | Realm segment of the namespace (key domain isolation) |
 | `lcl.crypto.keyVaultDatabase` | `String` | app database | MongoDB database holding `__lcl_keyvault` |
 | `lcl.crypto.autoInit` | `boolean` | `true` | Auto-create vault on first startup |
-| `lcl.crypto.cacheTtl` | `Duration` | `PT1H` (1 hour) | TTL for the in-memory DEK/HMAC key cache. After expiry, keys are securely zeroed and reloaded from MongoDB. Set `PT0S` to disable caching. |
+| `lcl.crypto.cacheTtl` | `Duration` | `PT1H` (1 hour) | TTL for the in-memory DEK/HMAC key cache. After expiry, keys are securely zeroed and reloaded. Set `PT0S` to disable caching. |
+
+## Adapter Configuration
+
+LCL requires a storage adapter module on the classpath. The adapter provides `VaultStore`, `StorageAdapter`, and `QueryTransformer` beans.
+
+### MongoDB Adapter (`lcl-adapter-mongodb`)
+
+Add the dependency:
+
+```xml
+<dependency>
+    <groupId>io.github.emmansun</groupId>
+    <artifactId>lcl-adapter-mongodb</artifactId>
+</dependency>
+```
+
+The adapter auto-configures when `MongoTemplate` is available:
+- `MongoVaultStore` — persists key vaults in the `__lcl_keyvault` collection
+- `MongoStorageAdapter` — BSON `Document` format for encrypted fields
+- `MongoQueryTransformer` — blind index query rewriting
+
+All beans use `@ConditionalOnMissingBean`, so you can override any of them with custom implementations.
+
+### Custom Adapter
+
+To use a different database, implement the SPI interfaces from `lcl-spi`:
+- `VaultStore` — key vault persistence
+- `StorageAdapter` — encrypted field format
+- `QueryTransformer` — blind index query rewriting
+
+Register your implementations as Spring beans.
 
 ## Local Symmetric CMK
 

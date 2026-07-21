@@ -4,20 +4,16 @@ import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.exception.OptimisticLockException;
 import io.github.emmansun.lightcrypto.model.GeneratedKey;
-import io.github.emmansun.lightcrypto.model.KeyVaultDocument;
-import io.github.emmansun.lightcrypto.model.KeyVaultDocument.WrappedKeyInfo;
-import io.github.emmansun.lightcrypto.model.KeyVaultDocument.KeyVersionEntry;
-import io.github.emmansun.lightcrypto.model.KeyVaultDocument.CmkInfo;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
+import io.github.emmansun.lightcrypto.spi.VaultDocument;
+import io.github.emmansun.lightcrypto.spi.VaultDocument.KeyEntry;
+import io.github.emmansun.lightcrypto.spi.VaultDocument.KeyStatus;
+import io.github.emmansun.lightcrypto.spi.VaultStore;
 import io.github.emmansun.lightcrypto.util.CryptoUtils;
-import com.mongodb.client.result.UpdateResult;
 import lombok.extern.slf4j.Slf4j;
-import org.bson.Document;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -26,23 +22,23 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Key Vault service — manages per-namespace DEK and HMAC keys stored in
- * the __lcl_keyvault collection.
+ * Key Vault service — manages per-namespace DEK and HMAC keys via {@link VaultStore} SPI.
  * <p>
- * Each namespace (tenant.realm.entity#field) gets its own vault document
- * (_id = lcl-dek-{canonicalNamespace}). Each vault supports key versioning
- * via a keys[] array with kid-based lookup.
+ * Each namespace (tenant.realm.entity#field) gets its own vault document.
+ * Each vault supports key versioning via a keys[] array with kid-based lookup.
+ * </p>
+ * <p>
+ * This service is storage-agnostic — all persistence operations are delegated to
+ * the injected {@link VaultStore} implementation.
  * </p>
  */
 @Slf4j
 public class KeyVaultService {
 
-    private static final String KEY_VAULT_COLLECTION = "__lcl_keyvault";
     private static final int KEY_LENGTH = 32;
-    private static final String VAULT_ID_PREFIX = "lcl-dek-";
     private static final AlgorithmId KCV_ALGORITHM = AlgorithmId.AES_256_GCM;
 
-    private final MongoTemplate mongoTemplate;
+    private final VaultStore vaultStore;
     private final CmkProvider cmkProvider;
     private final CryptoProperties properties;
     private final Duration cacheTtl;
@@ -51,17 +47,17 @@ public class KeyVaultService {
     /** Per-namespace key contexts: canonicalNamespace -> NamespaceKeyContext. */
     private final ConcurrentHashMap<String, NamespaceKeyContext> namespaceKeyContexts = new ConcurrentHashMap<>();
 
-    public KeyVaultService(MongoTemplate mongoTemplate, CmkProvider cmkProvider,
+    public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
                            CryptoProperties properties) {
-        this(mongoTemplate, cmkProvider, properties, Clock.systemUTC());
+        this(vaultStore, cmkProvider, properties, Clock.systemUTC());
     }
 
     /**
      * Constructor for testing with a custom {@link Clock} to control time-based expiry.
      */
-    public KeyVaultService(MongoTemplate mongoTemplate, CmkProvider cmkProvider,
+    public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
                     CryptoProperties properties, Clock clock) {
-        this.mongoTemplate = mongoTemplate;
+        this.vaultStore = vaultStore;
         this.cmkProvider = cmkProvider;
         this.properties = properties;
         this.cacheTtl = properties != null ? properties.getCacheTtl() : Duration.ofHours(1);
@@ -162,36 +158,52 @@ public class KeyVaultService {
      */
     public void rotateDek(String namespace) {
         synchronized (this) {
-            String vaultId = VAULT_ID_PREFIX + namespace;
-
-            KeyVaultDocument doc = loadVaultDocument(vaultId);
-            if (doc == null) {
+            Optional<VaultDocument> optDoc = vaultStore.load(namespace);
+            if (optDoc.isEmpty()) {
                 throw new FatalCryptoException("Vault not found for namespace: " + namespace);
             }
 
-            String expectedActiveKid = doc.getActiveKid();
-            int expectedVersion = doc.getV();
+            VaultDocument doc = optDoc.get();
+            long expectedVersion = doc.version();
 
+            // Mark all ACTIVE keys as ROTATED, find max version
+            List<KeyEntry> updatedKeys = new ArrayList<>();
             int maxVersion = 0;
-            for (KeyVersionEntry entry : doc.getKeys()) {
-                if ("ACTIVE".equals(entry.getStatus())) {
-                    entry.setStatus("ROTATED");
-                }
-                int ver = parseVersion(entry.getKid());
+            for (KeyEntry entry : doc.keys()) {
+                KeyStatus newStatus = entry.status() == KeyStatus.ACTIVE ? KeyStatus.ROTATED : entry.status();
+                updatedKeys.add(new KeyEntry(
+                        entry.kid(), newStatus, entry.wrappedDek(), entry.wrappedHmac(),
+                        entry.wrappingAlgorithm(),
+                        entry.dekKcv(), entry.hmacKcv(), entry.binding(), entry.createdAt()));
+                int ver = parseVersion(entry.kid());
                 if (ver > maxVersion) maxVersion = ver;
             }
 
+            // Create new key entry
             String newKid = generateKid(maxVersion + 1);
-            KeyVersionEntry newEntry = createKeyEntry(newKid);
+            KeyEntry newEntry = createKeyEntry(newKid);
+            updatedKeys.add(newEntry);
 
-            doc.getKeys().add(newEntry);
-            doc.setActiveKid(newKid);
-            doc.setV(expectedVersion + 1);
-            doc.setUpdatedAt(Instant.now());
+            // Build updated document with incremented version
+            VaultDocument updatedDoc = new VaultDocument(
+                    namespace,
+                    updatedKeys,
+                    newKid,
+                    expectedVersion + 1,
+                    doc.cmkProvider(),
+                    doc.cmkId(),
+                    doc.createdAt(),
+                    Instant.now());
 
-            persistRotatedVault(doc, vaultId, expectedActiveKid, expectedVersion);
+            // Persist with optimistic locking
+            try {
+                vaultStore.rotate(updatedDoc);
+            } catch (OptimisticLockException e) {
+                throw new FatalCryptoException(
+                        "Concurrent vault rotation detected for namespace: " + namespace + ". Please retry.", e);
+            }
 
-            verifyAndLoadKeys(doc, namespace);
+            verifyAndLoadKeys(updatedDoc, namespace);
 
             log.info("DEK rotated for namespace {}: new active kid = {}", namespace, newKid);
         }
@@ -200,70 +212,48 @@ public class KeyVaultService {
     // ===== Internal methods =====
 
     private void initForNamespace(String namespace) {
-        String vaultId = VAULT_ID_PREFIX + namespace;
-
-        KeyVaultDocument doc = loadVaultDocument(vaultId);
-        if (doc == null) {
-            doc = initializeVault(vaultId);
+        Optional<VaultDocument> optDoc = vaultStore.load(namespace);
+        VaultDocument doc;
+        if (optDoc.isEmpty()) {
+            doc = initializeVault(namespace);
+        } else {
+            doc = optDoc.get();
         }
         verifyAndLoadKeys(doc, namespace);
     }
 
-    private KeyVaultDocument loadVaultDocument(String vaultId) {
-        Query query = new Query(Criteria.where("_id").is(vaultId));
-        return mongoTemplate.findOne(query, KeyVaultDocument.class);
-    }
-
-    private void persistRotatedVault(KeyVaultDocument doc, String vaultId, String expectedActiveKid, int expectedVersion) {
-        Document replacement = new Document();
-        mongoTemplate.getConverter().write(doc, replacement);
-
-        Document filter = new Document("_id", vaultId)
-                .append("activeKid", expectedActiveKid)
-                .append("v", expectedVersion);
-
-        UpdateResult result = mongoTemplate.getDb()
-                .getCollection(KEY_VAULT_COLLECTION)
-                .replaceOne(filter, replacement);
-
-        if (result.getMatchedCount() == 0) {
-            throw new FatalCryptoException(
-                    "Concurrent vault rotation detected for vault: " + vaultId + ". Please retry.");
-        }
-    }
-
-    private KeyVaultDocument initializeVault(String vaultId) {
-        log.info("Initializing key vault: {}", vaultId);
+    private VaultDocument initializeVault(String namespace) {
+        log.info("Initializing key vault for namespace: {}", namespace);
 
         String kid = generateKid(1);
-        KeyVersionEntry entry = createKeyEntry(kid);
-
-        KeyVaultDocument doc = new KeyVaultDocument();
-        doc.setId(vaultId);
-        doc.setV(1);
-        doc.setStatus("ACTIVE");
-        doc.setActiveKid(kid);
-        doc.setKeys(new ArrayList<>(List.of(entry)));
-
-        CmkInfo cmkInfo = new CmkInfo();
-        cmkInfo.setProvider(cmkProvider.getProviderId());
-        cmkInfo.setId(cmkProvider.getPublicReference());
-        doc.setCmk(cmkInfo);
+        KeyEntry entry = createKeyEntry(kid);
 
         Instant now = Instant.now();
-        doc.setCreatedAt(now);
-        doc.setUpdatedAt(now);
+        VaultDocument doc = new VaultDocument(
+                namespace,
+                new ArrayList<>(List.of(entry)),
+                kid,
+                1L,
+                cmkProvider.getProviderId(),
+                cmkProvider.getPublicReference(),
+                now,
+                now);
 
         try {
-            mongoTemplate.insert(doc);
-        } catch (org.springframework.dao.DuplicateKeyException e) {
-            log.warn("Vault document already exists (concurrent init), loading instead.");
-            return loadVaultDocument(vaultId);
+            vaultStore.save(doc);
+        } catch (RuntimeException e) {
+            // Handle concurrent initialization — another instance may have created the document
+            log.warn("Vault document may already exist (concurrent init), attempting to load: {}", e.getMessage());
+            Optional<VaultDocument> existing = vaultStore.load(namespace);
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+            throw e;
         }
         return doc;
     }
 
-    private KeyVersionEntry createKeyEntry(String kid) {
+    private KeyEntry createKeyEntry(String kid) {
         GeneratedKey dekPair = cmkProvider.generateKey(KEY_LENGTH);
         byte[] rawDek = dekPair.rawKey();
         WrappedKey wrappedDek = dekPair.wrappedKey();
@@ -276,33 +266,22 @@ public class KeyVaultService {
         String hmacKcv = KeyCheckValue.computeHmacKcv(rawHmac);
         String binding = KeyCheckValue.computeBinding(rawHmac, rawDek);
 
-        WrappedKeyInfo dekInfo = new WrappedKeyInfo();
-        dekInfo.setWrapped(wrappedDek.ciphertext());
-        dekInfo.setAlgorithm(wrappedDek.algorithm());
-        dekInfo.setCmkVersion(wrappedDek.metadata().get(CmkProvider.META_CMK_VERSION));
-        dekInfo.setKcv(dekKcv);
-
-        WrappedKeyInfo hmacInfo = new WrappedKeyInfo();
-        hmacInfo.setWrapped(wrappedHmac.ciphertext());
-        hmacInfo.setAlgorithm(wrappedHmac.algorithm());
-        hmacInfo.setCmkVersion(wrappedHmac.metadata().get(CmkProvider.META_CMK_VERSION));
-        hmacInfo.setKcv(hmacKcv);
-
-        KeyVersionEntry entry = new KeyVersionEntry();
-        entry.setKid(kid);
-        entry.setStatus("ACTIVE");
-        entry.setDek(dekInfo);
-        entry.setHmk(hmacInfo);
-        entry.setBinding(binding);
-        entry.setCreatedAt(Instant.now());
-
-        return entry;
+        return new KeyEntry(
+                kid,
+                KeyStatus.ACTIVE,
+                wrappedDek.ciphertext(),
+                wrappedHmac.ciphertext(),
+                wrappedDek.algorithm(),
+                dekKcv,
+                hmacKcv,
+                binding,
+                Instant.now());
     }
 
-    private void verifyAndLoadKeys(KeyVaultDocument doc, String namespace) {
+    private void verifyAndLoadKeys(VaultDocument doc, String namespace) {
         try {
-            if (doc.getKeys() == null || doc.getKeys().isEmpty()) {
-                throw new FatalCryptoException("Vault has no key entries: " + doc.getId());
+            if (doc.keys() == null || doc.keys().isEmpty()) {
+                throw new FatalCryptoException("Vault has no key entries for namespace: " + namespace);
             }
 
             Map<String, ResolvedKeyPair> resolvedKeys = new HashMap<>();
@@ -311,52 +290,50 @@ public class KeyVaultService {
             int activeDekVersion = 0;
             int activeCount = 0;
 
-            for (KeyVersionEntry entry : doc.getKeys()) {
-                String dekCmkVersion = entry.getDek().getCmkVersion();
-                byte[] unwrappedDek = cmkProvider.unwrap(
-                        (dekCmkVersion == null || dekCmkVersion.isEmpty()) ? new WrappedKey(entry.getDek().getWrapped(), entry.getDek().getAlgorithm()) : new WrappedKey(entry.getDek().getWrapped(), entry.getDek().getAlgorithm(), Map.of(CmkProvider.META_CMK_VERSION, dekCmkVersion)));
+            for (KeyEntry entry : doc.keys()) {
+                // Unwrap DEK
+                byte[] unwrappedDek = cmkProvider.unwrap(new WrappedKey(entry.wrappedDek(), entry.wrappingAlgorithm()));
 
-                String hmacCmkVersion = entry.getHmk().getCmkVersion();
-                byte[] unwrappedHmac = cmkProvider.unwrap(
-                        (hmacCmkVersion == null || hmacCmkVersion.isEmpty()) ? new WrappedKey(entry.getHmk().getWrapped(), entry.getHmk().getAlgorithm()) : new WrappedKey(entry.getHmk().getWrapped(), entry.getHmk().getAlgorithm(), Map.of(CmkProvider.META_CMK_VERSION, hmacCmkVersion)));
+                // Unwrap HMAC key
+                byte[] unwrappedHmac = cmkProvider.unwrap(new WrappedKey(entry.wrappedHmac(), entry.wrappingAlgorithm()));
 
                 // KCV verification
                 String expectedDekKcv = KeyCheckValue.computeDekKcv(unwrappedDek, KCV_ALGORITHM);
-                if (!expectedDekKcv.equals(entry.getDek().getKcv())) {
+                if (!expectedDekKcv.equals(entry.dekKcv())) {
                     throw new FatalCryptoException(
-                            "DEK KCV mismatch for kid " + entry.getKid() + "! Vault integrity compromised.");
+                            "DEK KCV mismatch for kid " + entry.kid() + "! Vault integrity compromised.");
                 }
                 String expectedHmacKcv = KeyCheckValue.computeHmacKcv(unwrappedHmac);
-                if (!expectedHmacKcv.equals(entry.getHmk().getKcv())) {
+                if (!expectedHmacKcv.equals(entry.hmacKcv())) {
                     throw new FatalCryptoException(
-                            "HMAC Key KCV mismatch for kid " + entry.getKid() + "! Vault integrity compromised.");
+                            "HMAC Key KCV mismatch for kid " + entry.kid() + "! Vault integrity compromised.");
                 }
 
                 // Binding verification
                 String expectedBinding = KeyCheckValue.computeBinding(unwrappedHmac, unwrappedDek);
-                if (!expectedBinding.equals(entry.getBinding())) {
+                if (!expectedBinding.equals(entry.binding())) {
                     throw new FatalCryptoException(
-                            "Key binding mismatch for kid " + entry.getKid() + "! DEK/HMAC key pair corrupted.");
+                            "Key binding mismatch for kid " + entry.kid() + "! DEK/HMAC key pair corrupted.");
                 }
 
                 ResolvedKeyPair pair = new ResolvedKeyPair(unwrappedDek, unwrappedHmac);
-                resolvedKeys.put(entry.getKid(), pair);
+                resolvedKeys.put(entry.kid(), pair);
 
-                int version = parseVersion(entry.getKid());
+                int version = parseVersion(entry.kid());
                 resolvedKeysByVersion.put(version, pair);
 
-                if ("ACTIVE".equals(entry.getStatus())) {
-                    activeKid = entry.getKid();
+                if (entry.status() == KeyStatus.ACTIVE) {
+                    activeKid = entry.kid();
                     activeDekVersion = version;
                     activeCount++;
                 }
             }
 
             if (activeCount == 0) {
-                throw new FatalCryptoException("Vault has no ACTIVE key entry: " + doc.getId());
+                throw new FatalCryptoException("Vault has no ACTIVE key entry for namespace: " + namespace);
             }
             if (activeCount > 1) {
-                throw new FatalCryptoException("Vault has multiple ACTIVE key entries: " + doc.getId());
+                throw new FatalCryptoException("Vault has multiple ACTIVE key entries for namespace: " + namespace);
             }
 
             NamespaceKeyContext ctx = new NamespaceKeyContext(activeKid, activeDekVersion, resolvedKeys, resolvedKeysByVersion, computeExpiresAt());
@@ -364,11 +341,11 @@ public class KeyVaultService {
                 namespaceKeyContexts.put(namespace, ctx);
             }
 
-            log.info("Key vault loaded and verified: {} (active kid: {}, version: {})", doc.getId(), activeKid, activeDekVersion);
+            log.info("Key vault loaded and verified: {} (active kid: {}, version: {})", namespace, activeKid, activeDekVersion);
         } catch (FatalCryptoException e) {
             throw e;
         } catch (Exception e) {
-            throw new FatalCryptoException("Failed to verify key vault: " + doc.getId(), e);
+            throw new FatalCryptoException("Failed to verify key vault for namespace: " + namespace, e);
         }
     }
 

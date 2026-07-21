@@ -9,15 +9,25 @@ import java.util.List;
  * <p>Each namespace has its own vault document containing one or more versioned
  * DEK/HMAC key pairs wrapped by the CMK provider.
  *
- * @param namespace the canonical namespace this vault serves (e.g., "default.default.User")
- * @param keys      the list of key entries (versioned, wrapped)
- * @param activeKid the kid of the currently active key entry
+ * @param namespace   the canonical namespace this vault serves (e.g., "default.default.User#phone")
+ * @param keys        the list of key entries (versioned, wrapped)
+ * @param activeKid   the kid of the currently active key entry
+ * @param version     monotonically increasing document version for optimistic locking
+ * @param cmkProvider identifier of the CMK provider used for wrapping
+ * @param cmkId       CMK key identifier in the external KMS
+ * @param createdAt   document creation timestamp
+ * @param updatedAt   last modification timestamp
  * @since 1.0.0
  */
 public record VaultDocument(
         String namespace,
         List<KeyEntry> keys,
-        String activeKid
+        String activeKid,
+        long version,
+        String cmkProvider,
+        String cmkId,
+        Instant createdAt,
+        Instant updatedAt
 ) {
 
     /**
@@ -27,6 +37,7 @@ public record VaultDocument(
      * @param status     lifecycle status of this key
      * @param wrappedDek the DEK wrapped by CMK
      * @param wrappedHmac the HMAC key wrapped by CMK
+     * @param wrappingAlgorithm the algorithm used for wrapping (e.g., "AES-256-GCM", "RSA-OAEP-256")
      * @param dekKcv     key check value for the DEK (3 bytes, hex-encoded)
      * @param hmacKcv    key check value for the HMAC key (3 bytes, hex-encoded)
      * @param binding    binding hash between DEK and HMAC key
@@ -37,6 +48,7 @@ public record VaultDocument(
             KeyStatus status,
             byte[] wrappedDek,
             byte[] wrappedHmac,
+            String wrappingAlgorithm,
             String dekKcv,
             String hmacKcv,
             String binding,

@@ -1,9 +1,9 @@
 # LightCrypto-Link (LCL)
 
-Pure Java, lightweight application-level field encryption for Spring Boot + MongoDB.
+Pure Java, lightweight application-level field encryption for Spring Boot.
 
 Transparent encrypt/decrypt on write/read, HMAC blind index for exact-match queries,
-multi-DEK envelope encryption with key rotation support, and no libmongocrypt dependency.
+multi-DEK envelope encryption with key rotation support, pluggable storage adapters (MongoDB included), and no libmongocrypt dependency.
 
 [![CI](https://github.com/emmansun/LightCrypto-Link/actions/workflows/ci.yml/badge.svg)](https://github.com/emmansun/LightCrypto-Link/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/emmansun/LightCrypto-Link/graph/badge.svg?token=d6cfb4Z53D)](https://codecov.io/gh/emmansun/LightCrypto-Link)
@@ -38,6 +38,7 @@ Deep docs are in [docs](docs/):
 - Nested object and collection/map encryption
 - Whole-object mode for container confidentiality
 - Per-namespace multi-DEK vault with versioned `kid` and Wire Format V1 self-describing blobs
+- Pluggable storage adapters (MongoDB adapter included; SPI for JDBC, Elasticsearch, etc.)
 - Pluggable CMK providers (local, Azure Key Vault, Alibaba Cloud KMS)
 
 ## Quick Start
@@ -63,6 +64,12 @@ Add the starter dependency:
 <dependency>
   <groupId>io.github.emmansun</groupId>
   <artifactId>lcl-spring-boot-starter</artifactId>
+  <version>${lcl.version}</version>
+</dependency>
+<!-- Storage adapter (required — choose one) -->
+<dependency>
+  <groupId>io.github.emmansun</groupId>
+  <artifactId>lcl-adapter-mongodb</artifactId>
   <version>${lcl.version}</version>
 </dependency>
 ```
@@ -196,8 +203,9 @@ mvn clean verify
 
 ```text
 LightCrypto-Link/
-|- lcl-spi/                              # SPI contracts (CmkProvider, WrappedKey, VaultStore)
+|- lcl-spi/                              # SPI contracts (CmkProvider, WrappedKey, VaultStore, StorageAdapter, QueryTransformer)
 |- lcl-core/                             # Pure crypto core (Wire Format V1, CryptoCodec, BlindIndexEngine, KCV)
+|- lcl-adapter-mongodb/                  # MongoDB storage adapter (MongoVaultStore, MongoStorageAdapter, MongoQueryTransformer)
 |- lcl-spring-boot-starter/              # Core starter (annotation-driven encryption)
 |- lcl-provider-azure-kms/               # Azure Key Vault CMK provider
 |- lcl-provider-alibaba-kms/             # Alibaba Cloud KMS CMK provider

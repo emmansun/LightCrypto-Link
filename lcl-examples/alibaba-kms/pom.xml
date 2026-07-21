@@ -22,15 +22,9 @@
             <groupId>io.github.emmansun</groupId>
             <artifactId>lcl-spring-boot-starter</artifactId>
         </dependency>
-
-        <!-- Bouncy Castle (required for SM4 algorithm family) -->
         <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk18on</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
+            <groupId>io.github.emmansun</groupId>
+            <artifactId>lcl-adapter-mongodb</artifactId>
         </dependency>
 
         <!-- LCL Alibaba KMS CMK Provider -->

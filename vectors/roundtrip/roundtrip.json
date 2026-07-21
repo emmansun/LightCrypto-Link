@@ -10,7 +10,7 @@
       "dekVersion": 1
     },
     "expected": {
-      "wireFormatBase64url": "AQEAIGRlZmF1bHQuZGVmYXVsdC5UZXN0I0FFU18yNTZfR0NNAAAAAQy96avDZH3ezP_Oe5sAABM2ov3VTgUGYB0nOLiQW71nyt1BP_RE1IEAK7cxET7BkKz5GUQ",
+      "wireFormatBase64url": "AQEAIGRlZmF1bHQuZGVmYXVsdC5UZXN0I0FFU18yNTZfR0NNAAAAAQwoUbkWN0Urq4vX31oAANdih9bBjRs5oig8GCNhfM5erDD8nLpL-3fDduwD0SDYPHlXCB0",
       "roundtripOk": true
     }
   },
@@ -25,7 +25,7 @@
       "dekVersion": 1
     },
     "expected": {
-      "wireFormatBase64url": "AQIAIGRlZmF1bHQuZGVmYXVsdC5UZXN0I0FFU18yNTZfQ0JDAAAAARBdH4IrQmjXLgVWWyl7lwIZAAADuBRugRzUMP360GtM-H9YOyiD-mmectADwRt-wIBVRQ",
+      "wireFormatBase64url": "AQIAIGRlZmF1bHQuZGVmYXVsdC5UZXN0I0FFU18yNTZfQ0JDAAAAARB9pbrDVOKJdJMK2mpGRn_qAADfy2DPoaxwaB5cWN937M4HVIT29ioiOpZIexyp1K2Kgg",
       "roundtripOk": true
     }
   },
@@ -40,7 +40,7 @@
       "dekVersion": 1
     },
     "expected": {
-      "wireFormatBase64url": "AQMAHGRlZmF1bHQuZGVmYXVsdC5UZXN0I1NNNF9HQ00AAAABDL6FUbHKhvA-8picsAAAtBBkpqGv4am_RqwiNhTPnxS2WnkOqtLbKuzz0We8Gr58",
+      "wireFormatBase64url": "AQMAHGRlZmF1bHQuZGVmYXVsdC5UZXN0I1NNNF9HQ00AAAABDOEHtvceeIIZpBGscQAAUy5__QpGvBYDHaMfEO5HmfylintjtUZ6NL2u1mQJWa1D",
       "roundtripOk": true
     }
   },
@@ -55,7 +55,7 @@
       "dekVersion": 1
     },
     "expected": {
-      "wireFormatBase64url": "AQQAHGRlZmF1bHQuZGVmYXVsdC5UZXN0I1NNNF9DQkMAAAABEFZh6Fz9STX5ZqeOC9acry0AAIOeAiWhn8ppdRtdmdBGIgIodHPMAGCth8scKqS1pU29",
+      "wireFormatBase64url": "AQQAHGRlZmF1bHQuZGVmYXVsdC5UZXN0I1NNNF9DQkMAAAABEPDXqjVq23sJkwVRBY_KLGgAALC4B9INI_UaB5lnKBB3R0j22znSofftsd7E3LhxcZm7",
       "roundtripOk": true
     }
   }

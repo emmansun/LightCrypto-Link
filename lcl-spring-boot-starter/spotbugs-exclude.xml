@@ -1,24 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FindBugsFilter>
     <!--
-        Suppress EI_EXPOSE_REP / EI_EXPOSE_REP2 for Lombok @Data and Java records.
-        These are false positives: the classes are internal data holders,
-        and defensive copying would add unnecessary overhead.
+        Suppress EI_EXPOSE_REP / EI_EXPOSE_REP2 for Spring-managed beans.
+        Constructor-injected dependencies are immutable singletons;
+        defensive copying is not appropriate.
     -->
     <Match>
         <Or>
             <Class name="io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata"/>
-            <Class name="io.github.emmansun.lightcrypto.model.KeyVaultDocument"/>
-            <Class name="~io\.github\.emmansun\.lightcrypto\.model\.KeyVaultDocument\$.+"/>
-            <Class name="io.github.emmansun.lightcrypto.model.WrappedKey"/>
             <Class name="io.github.emmansun.lightcrypto.listener.EntityMetadataCache"/>
-            <Class name="io.github.emmansun.lightcrypto.listener.CryptoBeforeSaveListener"/>
-            <Class name="io.github.emmansun.lightcrypto.listener.CryptoMappingMongoConverter"/>
-            <Class name="io.github.emmansun.lightcrypto.query.CryptoMongoQueryCreator"/>
-            <Class name="io.github.emmansun.lightcrypto.query.CryptoMongoRepositoryFactory"/>
-            <Class name="io.github.emmansun.lightcrypto.query.CryptoQueryLookupStrategy"/>
             <Class name="io.github.emmansun.lightcrypto.service.FieldCryptoService"/>
             <Class name="io.github.emmansun.lightcrypto.service.KeyVaultService"/>
+            <Class name="io.github.emmansun.lightcrypto.service.ProgrammaticCryptoService"/>
         </Or>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>

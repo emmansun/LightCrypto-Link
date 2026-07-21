@@ -6,9 +6,10 @@ import io.github.emmansun.lightcrypto.core.format.WireFormatDecoder;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.exception.DecryptionException;
 import io.github.emmansun.lightcrypto.exception.KeyManagementException;
-import org.bson.Document;
-import org.bson.RawBsonDocument;
-import org.bson.codecs.DocumentCodec;
+import io.github.emmansun.lightcrypto.spi.StructuredValueCodec;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Programmatic crypto API for encrypt/decrypt operations outside annotation-driven persistence flow.
@@ -21,21 +22,22 @@ import org.bson.codecs.DocumentCodec;
  */
 public class ProgrammaticCryptoService {
 
-    private static final DocumentCodec DOCUMENT_CODEC = new DocumentCodec();
-
     private final TypeSerializer typeSerializer;
     private final TypeDeserializer typeDeserializer;
     private final KeyVaultService keyVaultService;
     private final FieldCryptoService fieldCryptoService;
+    private final StructuredValueCodec structuredValueCodec;
 
     public ProgrammaticCryptoService(TypeSerializer typeSerializer,
                                      TypeDeserializer typeDeserializer,
                                      KeyVaultService keyVaultService,
-                                     FieldCryptoService fieldCryptoService) {
+                                     FieldCryptoService fieldCryptoService,
+                                     StructuredValueCodec structuredValueCodec) {
         this.typeSerializer = typeSerializer;
         this.typeDeserializer = typeDeserializer;
         this.keyVaultService = keyVaultService;
         this.fieldCryptoService = fieldCryptoService;
+        this.structuredValueCodec = structuredValueCodec;
     }
 
     /**
@@ -46,7 +48,7 @@ public class ProgrammaticCryptoService {
      * @param namespace the namespace for key resolution and AAD binding
      * @return encrypted sub-document in Wire Format V1 canonical format (_e/_t/c)
      */
-    public Document encryptValue(Object value, String namespace) {
+    public Object encryptValue(Object value, String namespace) {
         return encryptValue(value, namespace, AlgorithmId.AES_256_GCM);
     }
 
@@ -58,7 +60,7 @@ public class ProgrammaticCryptoService {
      * @param algorithm symmetric algorithm for encryption
      * @return encrypted sub-document in Wire Format V1 canonical format (_e/_t/c)
      */
-    public Document encryptValue(Object value, String namespace, AlgorithmId algorithm) {
+    public Object encryptValue(Object value, String namespace, AlgorithmId algorithm) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -86,7 +88,7 @@ public class ProgrammaticCryptoService {
         byte[] serialized = typeSerializer.serialize(value);
         String blob = CryptoCodec.encrypt(dek, serialized, algorithm, ns, dekVersion);
 
-        Document subDoc = new Document();
+        Map<String, Object> subDoc = new LinkedHashMap<>();
         subDoc.put("c", blob);
         subDoc.put("_e", 1);
         subDoc.put("_t", typeMarker);
@@ -96,7 +98,7 @@ public class ProgrammaticCryptoService {
     /**
      * Encrypt a single scalar value using a key scope class (constructs namespace automatically).
      */
-    public Document encryptValue(Object value, Class<?> keyScopeClass) {
+    public Object encryptValue(Object value, Class<?> keyScopeClass) {
         String namespace = "default.default." + keyScopeClass.getSimpleName() + "#_default";
         return encryptValue(value, namespace);
     }
@@ -107,23 +109,26 @@ public class ProgrammaticCryptoService {
      * @param encryptedSubDocument encrypted sub-document containing _e/_t/c
      * @return decrypted object (scalar, Document, or List depending on type marker)
      */
-    public Object decryptValue(Document encryptedSubDocument) {
+    public Object decryptValue(Object encryptedSubDocument) {
         if (encryptedSubDocument == null) {
             throw new IllegalArgumentException("encryptedSubDocument must not be null");
         }
+        if (!(encryptedSubDocument instanceof Map<?, ?> subDoc)) {
+            throw new DecryptionException("encryptedSubDocument must be a Map-like object");
+        }
 
-        Integer eMarker = encryptedSubDocument.getInteger("_e");
-        if (eMarker == null || eMarker != 1) {
+        Object eMarkerObj = subDoc.get("_e");
+        if (!(eMarkerObj instanceof Integer eMarker) || eMarker != 1) {
             throw new DecryptionException("Document is not an encrypted sub-document (_e=1 missing)");
         }
 
-        String typeMarker = encryptedSubDocument.getString("_t");
-        if (typeMarker == null) {
+        Object typeMarkerObj = subDoc.get("_t");
+        if (!(typeMarkerObj instanceof String typeMarker)) {
             throw new DecryptionException("Encrypted sub-document is missing '_t' (type marker) field");
         }
 
-        String blob = encryptedSubDocument.getString("c");
-        if (blob == null) {
+        Object blobObj = subDoc.get("c");
+        if (!(blobObj instanceof String blob)) {
             throw new DecryptionException("Encrypted sub-document is missing 'c' (ciphertext) field");
         }
 
@@ -170,22 +175,15 @@ public class ProgrammaticCryptoService {
     /**
      * Decrypt all annotated encrypted fields in a raw document for the given entity class.
      */
-    public Document decryptDocument(Document rawDocument, Class<?> entityClass) {
+    public Object decryptDocument(Object rawDocument, Class<?> entityClass) {
         return fieldCryptoService.decryptDocument(rawDocument, entityClass);
     }
 
     private Object decodeStructuredValue(String typeMarker, byte[] plaintext) {
-        Document payload;
         try {
-            payload = new RawBsonDocument(plaintext).decode(DOCUMENT_CODEC);
+            return structuredValueCodec.decode(plaintext, typeMarker);
         } catch (RuntimeException ex) {
             throw new DecryptionException("Failed to decode structured payload for type marker: " + typeMarker, ex);
         }
-
-        return switch (typeMarker) {
-            case "DOC", "MAP" -> payload;
-            case "COL" -> payload.getList("_v", Object.class);
-            default -> throw new DecryptionException("Unsupported structured type marker: " + typeMarker);
-        };
     }
 }

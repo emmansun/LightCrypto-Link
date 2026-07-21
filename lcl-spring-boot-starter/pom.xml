@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>LCL :: Spring Boot Starter</name>
-    <description>Spring Boot MongoDB starter for Light Crypto Link — transparent field encryption with blind index.</description>
+    <description>Storage-agnostic Spring Boot starter for Light Crypto Link — transparent field encryption with blind index.</description>
 
     <dependencies>
         <dependency>
@@ -26,7 +26,7 @@
             <artifactId>lcl-core</artifactId>
         </dependency>
 
-        <!-- 1. Spring Boot core & auto-configuration -->
+        <!-- Spring Boot core & auto-configuration -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
@@ -38,14 +38,15 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- 2. MongoDB (standard abstractions only, no libmongocrypt) -->
+        <!-- Spring Data Commons (for @Transient annotation) -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-commons</artifactId>
+            <version>3.2.5</version>
             <scope>provided</scope>
         </dependency>
 
-        <!-- 3. Lombok -->
+        <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -53,16 +54,10 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- 4. Test dependencies -->
+        <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>de.flapdoodle.embed</groupId>
-            <artifactId>de.flapdoodle.embed.mongo.spring3x</artifactId>
-            <version>4.33.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

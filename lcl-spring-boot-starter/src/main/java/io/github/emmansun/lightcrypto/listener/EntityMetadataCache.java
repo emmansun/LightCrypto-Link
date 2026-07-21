@@ -9,7 +9,8 @@ import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.model.PathSegmentType;
 import org.springframework.data.annotation.Transient;
-import org.springframework.data.mongodb.core.mapping.DBRef;
+
+import java.lang.annotation.Annotation;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -289,7 +290,16 @@ public class EntityMetadataCache {
     }
 
     private boolean isExcludedField(Field field) {
-        return field.isAnnotationPresent(DBRef.class) || field.isAnnotationPresent(Transient.class);
+        return field.isAnnotationPresent(Transient.class) || hasAnnotationByName(field, "org.springframework.data.mongodb.core.mapping.DBRef");
+    }
+
+    private boolean hasAnnotationByName(Field field, String annotationClassName) {
+        for (Annotation annotation : field.getAnnotations()) {
+            if (annotation.annotationType().getName().equals(annotationClassName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void validateWholeObjectMode(Field field, Class<?> valueType, boolean wholeObject, Encrypted encrypted) {

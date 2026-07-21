@@ -8,43 +8,53 @@ import io.github.emmansun.lightcrypto.exception.KeyManagementException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.model.PathSegmentType;
+import io.github.emmansun.lightcrypto.spi.DocumentAccessor;
+import io.github.emmansun.lightcrypto.spi.StorageAdapter;
+import io.github.emmansun.lightcrypto.spi.StructuredValueCodec;
 import lombok.extern.slf4j.Slf4j;
-import org.bson.Document;
-import org.bson.RawBsonDocument;
-import org.bson.codecs.DocumentCodec;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Manual decryption service — allows users to decrypt @Encrypted fields
- * in a raw BSON Document obtained outside the transparent converter path
+ * in raw documents obtained outside the transparent converter path
  * (e.g. aggregation pipelines, native driver queries, data migration scripts).
  * <p>
  * Encapsulates Wire Format V1 blob parsing, DEK lookup by namespace + dekVersion,
  * and type deserialization.
+ * <p>
+ * Payload detection and extraction is delegated to {@link StorageAdapter}.
  */
 @Slf4j
 public class FieldCryptoService {
 
-    private static final DocumentCodec DOCUMENT_CODEC = new DocumentCodec();
-
     private final EntityMetadataCache metadataCache;
     private final TypeDeserializer typeDeserializer;
     private final KeyVaultService keyVaultService;
+    private final StorageAdapter storageAdapter;
+    private final DocumentAccessor documentAccessor;
+    private final StructuredValueCodec structuredValueCodec;
 
     public FieldCryptoService(EntityMetadataCache metadataCache,
                               TypeDeserializer typeDeserializer,
-                              KeyVaultService keyVaultService) {
+                              KeyVaultService keyVaultService,
+                              StorageAdapter storageAdapter,
+                              DocumentAccessor documentAccessor,
+                              StructuredValueCodec structuredValueCodec) {
         this.metadataCache = metadataCache;
         this.typeDeserializer = typeDeserializer;
         this.keyVaultService = keyVaultService;
+        this.storageAdapter = storageAdapter;
+        this.documentAccessor = documentAccessor;
+        this.structuredValueCodec = structuredValueCodec;
     }
 
     /**
-     * Decrypt all @Encrypted fields in the given raw Document for the specified entity class.
-     * Modifies the Document in-place and returns the same reference.
+     * Decrypt all @Encrypted fields in the given raw document for the specified entity class.
+     * Modifies the document in-place and returns the same reference.
      */
-    public Document decryptDocument(Document rawDocument, Class<?> entityClass) {
+    public Object decryptDocument(Object rawDocument, Class<?> entityClass) {
         if (rawDocument == null) {
             throw new IllegalArgumentException("rawDocument must not be null");
         }
@@ -64,40 +74,40 @@ public class FieldCryptoService {
     }
 
     @SuppressWarnings("unchecked")
-    private void decryptField(Document document, EncryptedFieldMetadata meta, int depth) {
+    private void decryptField(Object document, EncryptedFieldMetadata meta, int depth) {
         PathSegmentType pathType = meta.pathTypes().get(depth);
         String segment = meta.path().get(depth);
         boolean isLeaf = depth == meta.path().size() - 1;
 
         if (pathType == PathSegmentType.FIELD) {
-            Object raw = document.get(segment);
+            Object raw = getFieldValue(document, segment);
             if (raw == null) {
                 return;
             }
             if (isLeaf) {
-                Object value = decryptSubDocument(raw, meta);
+                Object value = decryptPayload(raw, meta);
                 if (value != null) {
-                    document.put(segment, value);
+                    setFieldValue(document, segment, value);
                 }
                 return;
             }
-            if (raw instanceof Document nestedDoc) {
-                decryptField(nestedDoc, meta, depth + 1);
+            if (isDocumentLike(raw)) {
+                decryptField(raw, meta, depth + 1);
             }
             return;
         }
 
         if (pathType == PathSegmentType.LIST_ITER) {
             if (isLeaf && meta.wholeObject()) {
-                Object raw = document.get(segment);
-                Object value = decryptSubDocument(raw, meta);
+                Object raw = getFieldValue(document, segment);
+                Object value = decryptPayload(raw, meta);
                 if (value != null) {
-                    document.put(segment, value);
+                    setFieldValue(document, segment, value);
                 }
                 return;
             }
 
-            Object rawArray = document.get(segment);
+            Object rawArray = getFieldValue(document, segment);
             if (!(rawArray instanceof List<?> array)) {
                 return;
             }
@@ -105,12 +115,12 @@ public class FieldCryptoService {
             for (int i = 0; i < array.size(); i++) {
                 Object raw = array.get(i);
                 if (isLeaf) {
-                    Object value = decryptSubDocument(raw, meta);
+                    Object value = decryptPayload(raw, meta);
                     if (value != null) {
                         ((List<Object>) array).set(i, value);
                     }
-                } else if (raw instanceof Document nestedDoc) {
-                    decryptField(nestedDoc, meta, depth + 1);
+                } else if (isDocumentLike(raw)) {
+                    decryptField(raw, meta, depth + 1);
                 }
             }
             return;
@@ -118,46 +128,44 @@ public class FieldCryptoService {
 
         if (pathType == PathSegmentType.MAP_ITER) {
             if (isLeaf && meta.wholeObject()) {
-                Object raw = document.get(segment);
-                Object value = decryptSubDocument(raw, meta);
+                Object raw = getFieldValue(document, segment);
+                Object value = decryptPayload(raw, meta);
                 if (value != null) {
-                    document.put(segment, value);
+                    setFieldValue(document, segment, value);
                 }
                 return;
             }
 
-            Object rawMap = document.get(segment);
-            if (!(rawMap instanceof Document mapDoc)) {
+            Object rawMap = getFieldValue(document, segment);
+            if (!isDocumentLike(rawMap)) {
                 return;
             }
-            for (java.util.Map.Entry<String, Object> entry : mapDoc.entrySet()) {
-                Object raw = entry.getValue();
-                if (isLeaf) {
-                    Object value = decryptSubDocument(raw, meta);
-                    if (value != null) {
-                        entry.setValue(value);
+            // For map iteration, we iterate over the document's keys via DocumentAccessor
+            Iterable<Map.Entry<String, Object>> entries = documentAccessor.asMap(rawMap);
+            if (entries != null) {
+                for (Map.Entry<String, Object> entry : entries) {
+                    Object raw = entry.getValue();
+                    if (isLeaf) {
+                        Object value = decryptPayload(raw, meta);
+                        if (value != null) {
+                            entry.setValue(value);
+                        }
+                    } else if (isDocumentLike(raw)) {
+                        decryptField(raw, meta, depth + 1);
                     }
-                } else if (raw instanceof Document nestedDoc) {
-                    decryptField(nestedDoc, meta, depth + 1);
                 }
             }
         }
     }
 
-    private Object decryptSubDocument(Object raw, EncryptedFieldMetadata meta) {
-        if (!(raw instanceof Document subDoc)) {
+    private Object decryptPayload(Object raw, EncryptedFieldMetadata meta) {
+        if (!storageAdapter.isEncryptedPayload(raw)) {
             return null;
         }
 
-        Integer eMarker = subDoc.getInteger("_e");
-        if (eMarker == null || eMarker != 1) {
-            return null;
-        }
+        String blob = storageAdapter.extractBlob(raw);
+        String typeMarker = storageAdapter.extractTypeMarker(raw);
 
-        String typeMarker = subDoc.getString("_t");
-
-        // Wire Format V1: "c" is a Base64URL string
-        String blob = subDoc.getString("c");
         if (blob == null) {
             return null;
         }
@@ -213,17 +221,24 @@ public class FieldCryptoService {
     }
 
     private Object decodeStructuredValue(String typeMarker, byte[] plaintext) {
-        Document payload;
         try {
-            payload = new RawBsonDocument(plaintext).decode(DOCUMENT_CODEC);
+            return structuredValueCodec.decode(plaintext, typeMarker);
         } catch (RuntimeException ex) {
             throw new DecryptionException("Failed to decode structured payload for type marker: " + typeMarker, ex);
         }
+    }
 
-        return switch (typeMarker) {
-            case "DOC", "MAP" -> payload;
-            case "COL" -> payload.getList("_v", Object.class);
-            default -> throw new DecryptionException("Unsupported structured type marker: " + typeMarker);
-        };
+    // ===== Document field access helpers (delegated to DocumentAccessor) =====
+
+    private Object getFieldValue(Object document, String field) {
+        return documentAccessor.getField(document, field);
+    }
+
+    private void setFieldValue(Object document, String field, Object value) {
+        documentAccessor.setField(document, field, value);
+    }
+
+    private boolean isDocumentLike(Object value) {
+        return documentAccessor.isDocumentLike(value);
     }
 }

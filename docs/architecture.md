@@ -6,13 +6,24 @@
 Application
   -> LCL save/query/read integration
   -> KeyVaultService (per-namespace DEK/HMAC management)
-  -> MongoDB encrypted documents + __lcl_keyvault
+  -> StorageAdapter (database-specific encrypted field format)
+  -> VaultStore (key vault persistence)
 ```
 
 LCL uses envelope encryption:
 - CMK wraps DEK/HMAC key material.
 - DEK encrypts business fields (Wire Format V1 self-describing blob).
 - HMAC key (HKDF-derived per namespace) generates blind indexes.
+
+## Module Structure
+
+| Module | Responsibility |
+|--------|---------------|
+| `lcl-spi` | Pure interfaces: `VaultStore`, `StorageAdapter`, `QueryTransformer`, `EncryptHandler`, `DecryptHandler` — no Spring/DB dependencies |
+| `lcl-core` | Cryptographic primitives: `CryptoCodec`, wire format, blind index, namespace model |
+| `lcl-adapter-mongodb` | MongoDB-specific implementations: `MongoVaultStore`, `MongoStorageAdapter`, `MongoQueryTransformer` |
+| `lcl-spring-boot-starter` | Auto-configuration, event listeners, query rewriting, field encryption service |
+| `lcl-provider-*` | CMK provider implementations (Alibaba KMS, Azure Key Vault) |
 
 ## Vault Model
 
@@ -86,3 +97,16 @@ When `@Encrypted(blindIndex = true)`:
 - Deterministic HMAC-SHA256 blind index is computed from the derived key + serialized value.
 - Stored in `b` field as Base64URL (43 chars, no padding).
 - Repository query rewriting targets `field.b`, avoiding decryption on query path.
+
+## Storage Adapter SPI
+
+LCL separates storage concerns from cryptographic orchestration via three SPI interfaces (defined in `lcl-spi`):
+
+- **`VaultStore`** — Document-level CRUD + optimistic-lock `rotate()` + batch `loadAll()`.  
+  Implementation: `MongoVaultStore` (collection `__lcl_keyvault`).
+- **`StorageAdapter`** — Database-specific encrypted field format. Builds/extracts `{c, _e, _t, b}` payloads.  
+  Implementation: `MongoStorageAdapter` (BSON `Document` format).
+- **`QueryTransformer`** — Rewrites plaintext field references to blind-index query targets (`field` → `field.b`, value → HMAC hash).  
+  Implementation: `MongoQueryTransformer`.
+
+This separation allows future adapter modules (e.g., `lcl-adapter-jdbc`, `lcl-adapter-elasticsearch`) without modifying core or starter code.

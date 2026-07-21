@@ -4,7 +4,9 @@ import io.github.emmansun.lightcrypto.config.CryptoProperties;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
-import io.github.emmansun.lightcrypto.model.KeyVaultDocument;
+import io.github.emmansun.lightcrypto.spi.VaultDocument;
+import io.github.emmansun.lightcrypto.spi.VaultDocument.KeyEntry;
+import io.github.emmansun.lightcrypto.spi.VaultDocument.KeyStatus;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
@@ -40,7 +42,7 @@ class KeyVaultServiceTest {
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         String kid = "v1-a1b2c3d4";
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
 
         invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE);
 
@@ -53,9 +55,10 @@ class KeyVaultServiceTest {
     void verifyAndLoadKeysRejectsNoActiveKey() throws Exception {
         KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
         String kid = "v1-a1b2c3d4";
-        KeyVaultDocument.KeyVersionEntry entry = activeEntry(kid, fixedKey((byte) 0x11), fixedKey((byte) 0x22));
-        entry.setStatus("ROTATED");
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, kid, List.of(entry));
+        KeyEntry entry = activeEntry(kid, fixedKey((byte) 0x11), fixedKey((byte) 0x22));
+        KeyEntry rotatedEntry = new KeyEntry(entry.kid(), KeyStatus.ROTATED, entry.wrappedDek(), entry.wrappedHmac(),
+                entry.wrappingAlgorithm(), entry.dekKcv(), entry.hmacKcv(), entry.binding(), entry.createdAt());
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, kid, List.of(rotatedEntry));
 
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -65,9 +68,9 @@ class KeyVaultServiceTest {
     @Test
     void verifyAndLoadKeysRejectsMultipleActiveKeys() throws Exception {
         KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
-        KeyVaultDocument.KeyVersionEntry e1 = activeEntry("v1-a1b2c3d4", fixedKey((byte) 0x11), fixedKey((byte) 0x22));
-        KeyVaultDocument.KeyVersionEntry e2 = activeEntry("v2-a1b2c3d5", fixedKey((byte) 0x33), fixedKey((byte) 0x44));
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, "v1-a1b2c3d4", List.of(e1, e2));
+        KeyEntry e1 = activeEntry("v1-a1b2c3d4", fixedKey((byte) 0x11), fixedKey((byte) 0x22));
+        KeyEntry e2 = activeEntry("v2-a1b2c3d5", fixedKey((byte) 0x33), fixedKey((byte) 0x44));
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of(e1, e2));
 
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -79,9 +82,11 @@ class KeyVaultServiceTest {
         KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
-        KeyVaultDocument.KeyVersionEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
-        entry.getDek().setKcv("bad-kcv");
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, "v1-a1b2c3d4", List.of(entry));
+        KeyEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
+        // Create a corrupted entry with wrong dekKcv
+        KeyEntry badEntry = new KeyEntry(entry.kid(), entry.status(), entry.wrappedDek(), entry.wrappedHmac(),
+                entry.wrappingAlgorithm(), "bad-kcv", entry.hmacKcv(), entry.binding(), entry.createdAt());
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of(badEntry));
 
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -93,9 +98,11 @@ class KeyVaultServiceTest {
         KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
-        KeyVaultDocument.KeyVersionEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
-        entry.getHmk().setKcv("bad-kcv");
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, "v1-a1b2c3d4", List.of(entry));
+        KeyEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
+        // Create a corrupted entry with wrong hmacKcv
+        KeyEntry badEntry = new KeyEntry(entry.kid(), entry.status(), entry.wrappedDek(), entry.wrappedHmac(),
+                entry.wrappingAlgorithm(), entry.dekKcv(), "bad-kcv", entry.binding(), entry.createdAt());
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of(badEntry));
 
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -107,9 +114,11 @@ class KeyVaultServiceTest {
         KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
-        KeyVaultDocument.KeyVersionEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
-        entry.setBinding("broken-binding");
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, "v1-a1b2c3d4", List.of(entry));
+        KeyEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
+        // Create a corrupted entry with wrong binding
+        KeyEntry badEntry = new KeyEntry(entry.kid(), entry.status(), entry.wrappedDek(), entry.wrappedHmac(),
+                entry.wrappingAlgorithm(), entry.dekKcv(), entry.hmacKcv(), "broken-binding", entry.createdAt());
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of(badEntry));
 
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -127,7 +136,7 @@ class KeyVaultServiceTest {
     @Test
     void verifyAndLoadKeysWrapsUnexpectedException() {
         KeyVaultService service = new KeyVaultService(null, new BrokenCmkProvider(), new CryptoProperties());
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, "v1-a1b2c3d4", List.of(activeEntry("v1-a1b2c3d4", fixedKey((byte) 0x11), fixedKey((byte) 0x22))));
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of(activeEntry("v1-a1b2c3d4", fixedKey((byte) 0x11), fixedKey((byte) 0x22))));
 
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -148,7 +157,7 @@ class KeyVaultServiceTest {
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         String kid = "v1-a1b2c3d4";
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
 
         invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE);
 
@@ -165,7 +174,7 @@ class KeyVaultServiceTest {
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         String kid = "v1-a1b2c3d4";
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
 
         invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE);
 
@@ -183,7 +192,7 @@ class KeyVaultServiceTest {
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         String kid = "v1-a1b2c3d4";
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
 
         invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE);
 
@@ -224,7 +233,7 @@ class KeyVaultServiceTest {
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         String kid = "v1-a1b2c3d4";
-        KeyVaultDocument doc = vaultDoc("lcl-dek-" + TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
 
         invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE);
 
@@ -267,8 +276,8 @@ class KeyVaultServiceTest {
                 .hasRootCauseMessage("Invalid kid format: bad-kid");
     }
 
-    private static void invokeVerifyAndLoadKeys(KeyVaultService service, KeyVaultDocument doc, String namespace) throws Exception {
-        Method method = KeyVaultService.class.getDeclaredMethod("verifyAndLoadKeys", KeyVaultDocument.class, String.class);
+    private static void invokeVerifyAndLoadKeys(KeyVaultService service, VaultDocument doc, String namespace) throws Exception {
+        Method method = KeyVaultService.class.getDeclaredMethod("verifyAndLoadKeys", VaultDocument.class, String.class);
         method.setAccessible(true);
         try {
             method.invoke(service, doc, namespace);
@@ -286,41 +295,31 @@ class KeyVaultServiceTest {
         return out;
     }
 
-    private static KeyVaultDocument vaultDoc(String id, String activeKid, List<KeyVaultDocument.KeyVersionEntry> keys) {
-        KeyVaultDocument doc = new KeyVaultDocument();
-        doc.setId(id);
-        doc.setV(1);
-        doc.setStatus("ACTIVE");
-        doc.setActiveKid(activeKid);
-        doc.setKeys(keys);
-        KeyVaultDocument.CmkInfo cmkInfo = new KeyVaultDocument.CmkInfo();
-        cmkInfo.setProvider("test");
-        cmkInfo.setId("cmk:test");
-        doc.setCmk(cmkInfo);
-        doc.setCreatedAt(Instant.now());
-        doc.setUpdatedAt(Instant.now());
-        return doc;
+    private static VaultDocument vaultDoc(String namespace, String activeKid, List<KeyEntry> keys) {
+        return new VaultDocument(
+                namespace,
+                keys,
+                activeKid,
+                1L,
+                "test",
+                "cmk:test",
+                Instant.now(),
+                Instant.now()
+        );
     }
 
-    private static KeyVaultDocument.KeyVersionEntry activeEntry(String kid, byte[] dek, byte[] hmac) {
-        KeyVaultDocument.WrappedKeyInfo dekInfo = new KeyVaultDocument.WrappedKeyInfo();
-        dekInfo.setWrapped(dek);
-        dekInfo.setAlgorithm("IDENTITY");
-        dekInfo.setKcv(KeyCheckValue.computeDekKcv(dek, KCV_ALGORITHM));
-
-        KeyVaultDocument.WrappedKeyInfo hmkInfo = new KeyVaultDocument.WrappedKeyInfo();
-        hmkInfo.setWrapped(hmac);
-        hmkInfo.setAlgorithm("IDENTITY");
-        hmkInfo.setKcv(KeyCheckValue.computeHmacKcv(hmac));
-
-        KeyVaultDocument.KeyVersionEntry entry = new KeyVaultDocument.KeyVersionEntry();
-        entry.setKid(kid);
-        entry.setStatus("ACTIVE");
-        entry.setDek(dekInfo);
-        entry.setHmk(hmkInfo);
-        entry.setBinding(KeyCheckValue.computeBinding(hmac, dek));
-        entry.setCreatedAt(Instant.now());
-        return entry;
+    private static KeyEntry activeEntry(String kid, byte[] dek, byte[] hmac) {
+        return new KeyEntry(
+                kid,
+                KeyStatus.ACTIVE,
+                dek,        // wrappedDek (identity provider returns as-is)
+                hmac,       // wrappedHmac (identity provider returns as-is)
+                "IDENTITY", // wrappingAlgorithm
+                KeyCheckValue.computeDekKcv(dek, KCV_ALGORITHM),
+                KeyCheckValue.computeHmacKcv(hmac),
+                KeyCheckValue.computeBinding(hmac, dek),
+                Instant.now()
+        );
     }
 
     private static class IdentityCmkProvider implements CmkProvider {
