@@ -16,7 +16,8 @@ class ObservabilityAutoConfigurationTest {
     @Test
     void defaultConfigurationRegistersEventBus() {
         contextRunner.run(context -> {
-            assertThat(context).hasSingleBean(EventBus.class);
+            assertThat(context).hasBean("compositeEventBus");
+            assertThat(context.getBean("compositeEventBus")).isInstanceOf(EventBus.class);
         });
     }
 
@@ -42,7 +43,8 @@ class ObservabilityAutoConfigurationTest {
     @Test
     void eventsEnabledRegistersSlf4jEventBus() {
         contextRunner.run(context -> {
-            assertThat(context).hasSingleBean(Slf4jEventBus.class);
+            assertThat(context).hasBean("slf4jEventBus");
+            assertThat(context.getBean("slf4jEventBus")).isInstanceOf(Slf4jEventBus.class);
         });
     }
 

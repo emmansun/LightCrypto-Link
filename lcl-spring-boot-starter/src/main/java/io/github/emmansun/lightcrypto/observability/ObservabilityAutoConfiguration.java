@@ -11,7 +11,6 @@ import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -33,15 +32,6 @@ import java.util.Map;
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "lightcrypto.observability", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class ObservabilityAutoConfiguration {
-
-    /**
-     * Default EventBus bean — NoOpEventBus when no other EventBus is configured.
-     */
-    @Bean
-    @ConditionalOnMissingBean(EventBus.class)
-    public EventBus lclEventBus() {
-        return NoOpEventBus.INSTANCE;
-    }
 
     // ===== Events (Slf4jEventBus) =====
 
@@ -81,7 +71,6 @@ public class ObservabilityAutoConfiguration {
 
         @Bean
         @Primary
-        @ConditionalOnBean({Slf4jEventBus.class})
         public EventBus compositeEventBus(ApplicationContext context) {
             List<EventBus> delegates = new ArrayList<>();
 
