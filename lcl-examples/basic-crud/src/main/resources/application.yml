@@ -6,7 +6,7 @@ lightcrypto:
         type: LOCAL_SYMMETRIC
         # CMK: 64 hex chars = 32-byte symmetric master key.
         # In production, inject via env var / K8s Secret / Config Service.
-        keyHex: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+        key-hex: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
 
 # Embedded MongoDB (for local demo; remove if using external MongoDB)
 de:
