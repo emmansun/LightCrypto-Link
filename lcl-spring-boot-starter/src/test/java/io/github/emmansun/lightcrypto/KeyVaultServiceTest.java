@@ -1,6 +1,6 @@
 package io.github.emmansun.lightcrypto;
 
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
@@ -29,7 +29,7 @@ class KeyVaultServiceTest {
 
     @Test
     void getActiveKidBeforeInitThrows() {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
 
         assertThatThrownBy(() -> service.getActiveKid(TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -38,7 +38,7 @@ class KeyVaultServiceTest {
 
     @Test
     void verifyAndLoadKeysLoadsContextForActiveKid() throws Exception {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         String kid = "v1-a1b2c3d4";
@@ -53,7 +53,7 @@ class KeyVaultServiceTest {
 
     @Test
     void verifyAndLoadKeysRejectsNoActiveKey() throws Exception {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
         String kid = "v1-a1b2c3d4";
         KeyEntry entry = activeEntry(kid, fixedKey((byte) 0x11), fixedKey((byte) 0x22));
         KeyEntry rotatedEntry = new KeyEntry(entry.kid(), KeyStatus.ROTATED, entry.wrappedDek(), entry.wrappedHmac(),
@@ -67,7 +67,7 @@ class KeyVaultServiceTest {
 
     @Test
     void verifyAndLoadKeysRejectsMultipleActiveKeys() throws Exception {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
         KeyEntry e1 = activeEntry("v1-a1b2c3d4", fixedKey((byte) 0x11), fixedKey((byte) 0x22));
         KeyEntry e2 = activeEntry("v2-a1b2c3d5", fixedKey((byte) 0x33), fixedKey((byte) 0x44));
         VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of(e1, e2));
@@ -79,7 +79,7 @@ class KeyVaultServiceTest {
 
     @Test
     void verifyAndLoadKeysRejectsDekKcvMismatch() throws Exception {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         KeyEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
@@ -95,7 +95,7 @@ class KeyVaultServiceTest {
 
     @Test
     void verifyAndLoadKeysRejectsHmacKcvMismatch() throws Exception {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         KeyEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
@@ -111,7 +111,7 @@ class KeyVaultServiceTest {
 
     @Test
     void verifyAndLoadKeysRejectsBindingMismatch() throws Exception {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         KeyEntry entry = activeEntry("v1-a1b2c3d4", dek, hmac);
@@ -127,7 +127,7 @@ class KeyVaultServiceTest {
 
     @Test
     void getDekAndGetHmacUnknownKidThrow() {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
 
         assertThatThrownBy(() -> service.getDek("v9-unknown")).isInstanceOf(FatalCryptoException.class).hasMessageContaining("Unknown kid");
         assertThatThrownBy(() -> service.getHmacKey("v9-unknown")).isInstanceOf(FatalCryptoException.class).hasMessageContaining("Unknown kid");
@@ -135,7 +135,7 @@ class KeyVaultServiceTest {
 
     @Test
     void verifyAndLoadKeysWrapsUnexpectedException() {
-        KeyVaultService service = new KeyVaultService(null, new BrokenCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new BrokenCmkProvider(), (KeyVaultProperties) null);
         VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of(activeEntry("v1-a1b2c3d4", fixedKey((byte) 0x11), fixedKey((byte) 0x22))));
 
         assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE))
@@ -145,14 +145,14 @@ class KeyVaultServiceTest {
 
     @Test
     void defaultCacheTtlIsOneHour() {
-        CryptoProperties props = new CryptoProperties();
-        assertThat(props.getCacheTtl()).isEqualTo(Duration.ofHours(1));
+        KeyVaultProperties props = new KeyVaultProperties();
+        assertThat(props.getCache().getTtl()).isEqualTo(Duration.ofHours(1));
     }
 
     @Test
     void cacheEntryHasFutureExpiresAtWithinTtl() throws Exception {
-        CryptoProperties props = new CryptoProperties();
-        props.setCacheTtl(Duration.ofHours(1));
+        KeyVaultProperties props = new KeyVaultProperties();
+        props.getCache().setTtl(Duration.ofHours(1));
         KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), props);
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
@@ -168,8 +168,8 @@ class KeyVaultServiceTest {
 
     @Test
     void cacheEntryExpiresAtIsEpochWhenTtlIsZero() throws Exception {
-        CryptoProperties props = new CryptoProperties();
-        props.setCacheTtl(Duration.ZERO);
+        KeyVaultProperties props = new KeyVaultProperties();
+        props.getCache().setTtl(Duration.ZERO);
         KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), props);
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
@@ -188,7 +188,7 @@ class KeyVaultServiceTest {
 
     @Test
     void flushCacheZerosKeyMaterialAndClearsMap() throws Exception {
-        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), new CryptoProperties());
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
         byte[] dek = fixedKey((byte) 0x11);
         byte[] hmac = fixedKey((byte) 0x22);
         String kid = "v1-a1b2c3d4";
@@ -222,8 +222,8 @@ class KeyVaultServiceTest {
 
     @Test
     void expiredEntryIsDetectedByIsExpired() throws Exception {
-        CryptoProperties props = new CryptoProperties();
-        props.setCacheTtl(Duration.ofHours(1));
+        KeyVaultProperties props = new KeyVaultProperties();
+        props.getCache().setTtl(Duration.ofHours(1));
 
         // Use a fixed clock in the past so expiresAt = pastTime + 1h = still in the past
         Instant fixedPastTime = Instant.parse("2020-01-01T00:00:00Z");
@@ -252,9 +252,9 @@ class KeyVaultServiceTest {
 
     @Test
     void customCacheTtlIsRespected() {
-        CryptoProperties props = new CryptoProperties();
-        props.setCacheTtl(Duration.ofMinutes(30));
-        assertThat(props.getCacheTtl()).isEqualTo(Duration.ofMinutes(30));
+        KeyVaultProperties props = new KeyVaultProperties();
+        props.getCache().setTtl(Duration.ofMinutes(30));
+        assertThat(props.getCache().getTtl()).isEqualTo(Duration.ofMinutes(30));
     }
 
     @Test

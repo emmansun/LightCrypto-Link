@@ -31,7 +31,7 @@ LCL uses envelope encryption:
 - Scope: one vault document per **namespace** (tenant.realm.entity#field)
 - Vault id: `lcl-dek-{canonicalNamespace}` (e.g. `lcl-dek-default.default.User#phone`)
 - Each vault stores versioned key entries in `keys[]` with `kid` (for example `v1-a3b2c1d4`)
-- Namespace is derived from `lcl.crypto.tenant`, `lcl.crypto.realm`, entity simple name, and field path
+- Namespace is derived from `lightcrypto.tenants.tenant`, `lightcrypto.tenants.realm`, entity simple name, and field path
 
 ## Encrypted Sub-document Format (Wire Format V1)
 
@@ -85,9 +85,9 @@ Behavior:
 `KeyVaultService` caches unwrapped DEK and HMAC keys in memory to avoid repeated MongoDB reads and CMK unwrap operations.
 
 - **Storage**: `ConcurrentHashMap<String, NamespaceKeyContext>` keyed by canonical namespace.
-- **TTL**: Configurable via `lcl.crypto.cache-ttl` (default `PT1H` / 1 hour). Expired entries are lazily evicted on the next access — no background thread is needed.
+- **TTL**: Configurable via `lightcrypto.keyvault.cache.ttl` (default `PT1H` / 1 hour). Expired entries are lazily evicted on the next access — no background thread is needed.
 - **Secure eviction**: When a cache entry expires or is flushed, all `byte[]` key material (DEK and HMAC keys, including historical versions) is explicitly zeroed with `Arrays.fill()` before the entry is removed.
-- **Disable caching**: Set `lcl.crypto.cache-ttl=PT0S` to skip caching entirely. Every access will reload from MongoDB and verify KCV/binding.
+- **Disable caching**: Set `lightcrypto.keyvault.cache.ttl=PT0S` to skip caching entirely. Every access will reload from MongoDB and verify KCV/binding.
 - **Manual flush**: Call `keyVaultService.flushCache()` to immediately zero and evict all cached entries (e.g., on shutdown or after a security event).
 
 ## Blind Index

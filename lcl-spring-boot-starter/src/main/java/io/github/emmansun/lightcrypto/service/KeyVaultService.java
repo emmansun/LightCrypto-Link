@@ -1,6 +1,6 @@
 package io.github.emmansun.lightcrypto.service;
 
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
@@ -40,7 +40,6 @@ public class KeyVaultService {
 
     private final VaultStore vaultStore;
     private final CmkProvider cmkProvider;
-    private final CryptoProperties properties;
     private final Duration cacheTtl;
     private final Clock clock;
 
@@ -48,19 +47,20 @@ public class KeyVaultService {
     private final ConcurrentHashMap<String, NamespaceKeyContext> namespaceKeyContexts = new ConcurrentHashMap<>();
 
     public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
-                           CryptoProperties properties) {
-        this(vaultStore, cmkProvider, properties, Clock.systemUTC());
+                           KeyVaultProperties keyVaultProperties) {
+        this(vaultStore, cmkProvider, keyVaultProperties, Clock.systemUTC());
     }
 
     /**
      * Constructor for testing with a custom {@link Clock} to control time-based expiry.
      */
     public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
-                    CryptoProperties properties, Clock clock) {
+                    KeyVaultProperties keyVaultProperties, Clock clock) {
         this.vaultStore = vaultStore;
         this.cmkProvider = cmkProvider;
-        this.properties = properties;
-        this.cacheTtl = properties != null ? properties.getCacheTtl() : Duration.ofHours(1);
+        this.cacheTtl = keyVaultProperties != null && keyVaultProperties.getCache() != null
+                ? keyVaultProperties.getCache().getTtl()
+                : Duration.ofHours(1);
         this.clock = clock;
     }
 

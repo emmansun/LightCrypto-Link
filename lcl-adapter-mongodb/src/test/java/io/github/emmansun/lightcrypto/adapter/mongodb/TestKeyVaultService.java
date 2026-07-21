@@ -18,7 +18,7 @@ public class TestKeyVaultService extends KeyVaultService {
     private final ConcurrentHashMap<String, String> namespaceActiveKids = new ConcurrentHashMap<>();
 
     public TestKeyVaultService(byte[] dek, byte[] hmacKey) {
-        super(new InMemoryVaultStore(), null, null);
+        super(new InMemoryVaultStore(), null, (io.github.emmansun.lightcrypto.config.KeyVaultProperties) null);
         this.dek = dek;
         this.hmacKey = hmacKey;
     }

@@ -27,7 +27,7 @@ public @interface Encrypted {
     /**
      * Symmetric encryption algorithm.
      * Defaults to {@link SymmetricAlgorithm#DEFAULT}, which resolves to the global
-     * configuration {@code lcl.crypto.algorithm} (default: AES_256_GCM).
+     * configuration {@code lightcrypto.cryptography.default-algorithm} (default: AES_256_GCM).
      * Override per-field to use a specific algorithm.
      */
     SymmetricAlgorithm algorithm() default SymmetricAlgorithm.DEFAULT;

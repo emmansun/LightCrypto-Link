@@ -3,7 +3,8 @@ package io.github.emmansun.lightcrypto.adapter.mongodb;
 import io.github.emmansun.lightcrypto.core.CryptoCodec;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.CryptographyProperties;
+import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.exception.DecryptionException;
 import io.github.emmansun.lightcrypto.exception.KeyManagementException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
@@ -44,7 +45,7 @@ class ProgrammaticCryptoServiceTest extends MongoAdapterTestBase {
         deserializer = createTestTypeDeserializer();
         keyVaultService = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY);
         fieldCryptoService = new FieldCryptoService(
-                new EntityMetadataCache(new CryptoProperties()),
+                new EntityMetadataCache(new CryptographyProperties(), new TenantProperties()),
                 deserializer,
                 keyVaultService,
                 createTestStorageAdapter(),

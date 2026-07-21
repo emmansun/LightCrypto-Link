@@ -4,7 +4,8 @@ import io.github.emmansun.lightcrypto.core.CryptoCodec;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.exception.DecryptionException;
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.CryptographyProperties;
+import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
 import io.github.emmansun.lightcrypto.exception.KeyManagementException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
@@ -46,7 +47,7 @@ class FieldCryptoServiceTest extends MongoAdapterTestBase {
 
     @BeforeEach
     void setup() {
-        EntityMetadataCache mc = new EntityMetadataCache(new CryptoProperties());
+        EntityMetadataCache mc = new EntityMetadataCache(new CryptographyProperties(), new TenantProperties());
         TypeDeserializer des = createTestTypeDeserializer();
         KeyVaultService vs = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY);
         fieldCryptoService = new FieldCryptoService(mc, des, vs, createTestStorageAdapter(), createTestDocumentAccessor(), createTestStructuredValueCodec());
@@ -351,7 +352,7 @@ class FieldCryptoServiceTest extends MongoAdapterTestBase {
             }
         };
         fieldCryptoService = new FieldCryptoService(
-                new EntityMetadataCache(new CryptoProperties()), createTestTypeDeserializer(), failingVault,
+                new EntityMetadataCache(new CryptographyProperties(), new TenantProperties()), createTestTypeDeserializer(), failingVault,
                 createTestStorageAdapter(), createTestDocumentAccessor(), createTestStructuredValueCodec());
         String blob = encryptForField("hello", AlgorithmId.AES_256_GCM, "TestUser", "phone");
         Document doc = new Document("phone", buildSubDoc(blob, "STR"));

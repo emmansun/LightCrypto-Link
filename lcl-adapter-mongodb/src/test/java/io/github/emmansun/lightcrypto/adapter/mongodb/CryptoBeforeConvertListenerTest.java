@@ -1,6 +1,7 @@
 package io.github.emmansun.lightcrypto.adapter.mongodb;
 
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.CryptographyProperties;
+import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.core.CryptoCodec;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
@@ -32,7 +33,7 @@ class CryptoBeforeConvertListenerTest extends MongoAdapterTestBase {
 
     @BeforeEach
     void setup() {
-        EntityMetadataCache mc = new EntityMetadataCache(new CryptoProperties());
+        EntityMetadataCache mc = new EntityMetadataCache(new CryptographyProperties(), new TenantProperties());
         TypeDeserializer des = createTestTypeDeserializer();
         KeyVaultService vs = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY);
         FieldCryptoService fieldCryptoService = new FieldCryptoService(mc, des, vs, createTestStorageAdapter(), createTestDocumentAccessor(), createTestStructuredValueCodec());

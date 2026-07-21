@@ -3,7 +3,8 @@ package io.github.emmansun.lightcrypto.listener;
 import io.github.emmansun.lightcrypto.annotation.Encrypted;
 import io.github.emmansun.lightcrypto.annotation.EncryptionMode;
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.CryptographyProperties;
+import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
@@ -35,11 +36,13 @@ public class EntityMetadataCache {
 
     private static final int MAX_DEPTH = 5;
 
-    private final CryptoProperties cryptoProperties;
+    private final CryptographyProperties cryptographyProperties;
+    private final TenantProperties tenantProperties;
     private final Map<Class<?>, List<EncryptedFieldMetadata>> cache = new ConcurrentHashMap<>();
 
-    public EntityMetadataCache(CryptoProperties cryptoProperties) {
-        this.cryptoProperties = cryptoProperties;
+    public EntityMetadataCache(CryptographyProperties cryptographyProperties, TenantProperties tenantProperties) {
+        this.cryptographyProperties = cryptographyProperties;
+        this.tenantProperties = tenantProperties;
     }
 
     /**
@@ -160,7 +163,7 @@ public class EntityMetadataCache {
                                       MethodHandle getter,
                                       String rootEntityName) {
         SymmetricAlgorithm algo = (encrypted.algorithm() == SymmetricAlgorithm.DEFAULT)
-                ? cryptoProperties.getAlgorithm()
+                ? cryptographyProperties.getDefaultAlgorithm()
                 : encrypted.algorithm();
 
         if (isCollectionType(fieldType)) {
@@ -238,8 +241,8 @@ public class EntityMetadataCache {
      * Format: default.default.{EntityName}#{fieldPath}
      */
     private Namespace buildNamespace(String rootEntityName, List<String> fieldPath) {
-        String tenant = cryptoProperties.getTenant() != null ? cryptoProperties.getTenant() : "default";
-        String realm = cryptoProperties.getRealm() != null ? cryptoProperties.getRealm() : "default";
+        String tenant = tenantProperties != null ? tenantProperties.getTenant() : "default";
+        String realm = tenantProperties != null ? tenantProperties.getRealm() : "default";
         String field = String.join(".", fieldPath);
         return Namespace.of(tenant, realm, rootEntityName, field);
     }

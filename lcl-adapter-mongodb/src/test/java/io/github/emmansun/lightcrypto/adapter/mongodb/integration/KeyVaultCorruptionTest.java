@@ -1,7 +1,7 @@
 package io.github.emmansun.lightcrypto.adapter.mongodb.integration;
 
 import io.github.emmansun.lightcrypto.adapter.mongodb.MongoVaultStore;
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
@@ -49,7 +49,7 @@ class KeyVaultCorruptionTest {
     private CmkProvider cmkProvider;
 
     @Autowired
-    private CryptoProperties properties;
+    private KeyVaultProperties keyVaultProperties;
 
     @BeforeEach
     void ensureVaultReady() {
@@ -66,7 +66,7 @@ class KeyVaultCorruptionTest {
         byte[] originalHmac = keyVaultService.getHmacKey(activeKid).clone();
 
         // Create a second KeyVaultService instance with the same dependencies
-        KeyVaultService secondService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, properties);
+        KeyVaultService secondService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, keyVaultProperties);
         secondService.ensureVaultInitialized(TEST_NAMESPACE);
 
         String secondKid = secondService.getActiveKid(TEST_NAMESPACE);
@@ -91,7 +91,7 @@ class KeyVaultCorruptionTest {
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
 
         // A new KeyVaultService should fail to verify the corrupted vault
-        KeyVaultService newService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, properties);
+        KeyVaultService newService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, keyVaultProperties);
 
         assertThatThrownBy(() -> newService.ensureVaultInitialized(TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -110,7 +110,7 @@ class KeyVaultCorruptionTest {
         Update update = new Update().set("keys.$.binding", "0000000000000000000000000000000000000000000000000000000000000000");
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
 
-        KeyVaultService newService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, properties);
+        KeyVaultService newService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, keyVaultProperties);
 
         assertThatThrownBy(() -> newService.ensureVaultInitialized(TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
@@ -124,7 +124,7 @@ class KeyVaultCorruptionTest {
     @Test
     @Order(4)
     void kcvCorruptionDetectedOnVaultReload() {
-        KeyVaultService healthyService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, properties);
+        KeyVaultService healthyService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, keyVaultProperties);
         assertThatNoException().isThrownBy(() -> healthyService.ensureVaultInitialized(TEST_NAMESPACE));
         String kid = healthyService.getActiveKid(TEST_NAMESPACE);
         assertThat(healthyService.getDek(kid)).hasSize(32);
@@ -134,7 +134,7 @@ class KeyVaultCorruptionTest {
         Update update = new Update().set("keys.$.hmacKcv", "deadbeef000000000000000000000000");
         mongoTemplate.updateFirst(query, update, "__lcl_keyvault");
 
-        KeyVaultService corruptService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, properties);
+        KeyVaultService corruptService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, keyVaultProperties);
         assertThatThrownBy(() -> corruptService.ensureVaultInitialized(TEST_NAMESPACE))
                 .isInstanceOf(FatalCryptoException.class)
                 .hasMessageContaining("KCV mismatch");
@@ -183,9 +183,8 @@ class KeyVaultCorruptionTest {
     @Test
     @Order(6)
     void cacheExpiryTriggersReloadAndZerosOldKeyMaterial() throws Exception {
-        CryptoProperties shortTtlProps = new CryptoProperties();
-        shortTtlProps.setCmk(properties.getCmk());
-        shortTtlProps.setCacheTtl(Duration.ofMillis(100));
+        KeyVaultProperties shortTtlProps = new KeyVaultProperties();
+        shortTtlProps.getCache().setTtl(Duration.ofMillis(100));
 
         KeyVaultService shortTtlService = new KeyVaultService(new MongoVaultStore(mongoTemplate), cmkProvider, shortTtlProps);
         shortTtlService.ensureVaultInitialized(TEST_NAMESPACE);

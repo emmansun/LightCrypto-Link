@@ -1,6 +1,7 @@
 package io.github.emmansun.lightcrypto;
 
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.CryptographyProperties;
+import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.testmodel.TestEmployee;
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.*;
  */
 class EntityMetadataCachePreWarmTest {
 
-    private final EntityMetadataCache cache = new EntityMetadataCache(new CryptoProperties());
+    private final EntityMetadataCache cache = new EntityMetadataCache(new CryptographyProperties(), new TenantProperties());
 
     @Test
     void preWarmPopulatesCacheForMultipleClasses() {

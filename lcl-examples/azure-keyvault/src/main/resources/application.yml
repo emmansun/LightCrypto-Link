@@ -1,7 +1,10 @@
 # LightCrypto-Link configuration — Azure Key Vault
+#
+# The Azure Key Vault provider module uses its own configuration prefix (lcl.crypto.azure).
+# It auto-activates when lcl.crypto.azure.vault-uri is set.
+
 lcl:
   crypto:
-    enabled: true
     azure:
       vault-uri: ${AZURE_VAULT_URI}
       key-name: ${AZURE_KEY_NAME}

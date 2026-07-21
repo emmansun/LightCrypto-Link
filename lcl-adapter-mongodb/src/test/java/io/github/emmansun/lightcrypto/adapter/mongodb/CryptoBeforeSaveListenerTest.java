@@ -1,6 +1,7 @@
 package io.github.emmansun.lightcrypto.adapter.mongodb;
 
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.CryptographyProperties;
+import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
@@ -30,7 +31,7 @@ class CryptoBeforeSaveListenerTest extends MongoAdapterTestBase {
 
     @BeforeEach
     void setup() {
-        EntityMetadataCache mc = new EntityMetadataCache(new CryptoProperties());
+        EntityMetadataCache mc = new EntityMetadataCache(new CryptographyProperties(), new TenantProperties());
         TypeSerializer ser = createTestTypeSerializer();
         KeyVaultService vs = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY);
         BlindIndexEngine blindIndexEngine = new BlindIndexEngine(TEST_HMAC_KEY);

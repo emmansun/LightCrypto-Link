@@ -17,7 +17,7 @@ multi-DEK envelope encryption with key rotation support, pluggable storage adapt
 ## TL;DR
 
 1. Add starter dependency.
-2. Configure a CMK provider (`lcl.crypto.cmk` for local, or cloud KMS module).
+2. Configure a CMK provider (`lightcrypto.kms.providers` for local, or cloud KMS module).
 3. Annotate fields with `@Encrypted`.
 4. Use repository methods normally; blind-index queries work for `blindIndex=true` fields.
 
@@ -74,21 +74,6 @@ Add the starter dependency:
 </dependency>
 ```
 
-For SM2/SM3/SM4, add Bouncy Castle explicitly:
-
-```xml
-<dependency>
-  <groupId>org.bouncycastle</groupId>
-  <artifactId>bcprov-jdk18on</artifactId>
-  <version>1.84</version>
-</dependency>
-<dependency>
-  <groupId>org.bouncycastle</groupId>
-  <artifactId>bcpkix-jdk18on</artifactId>
-  <version>1.84</version>
-</dependency>
-```
-
 Cloud KMS modules:
 
 ```xml
@@ -115,11 +100,14 @@ If you need snapshot builds, use GitHub Packages:
 Local symmetric CMK example:
 
 ```yaml
-lcl:
-  crypto:
-    cmk: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
-    enabled: true
-    algorithm: AES_256_GCM
+lightcrypto:
+  kms:
+    providers:
+      - id: local
+        type: LOCAL_SYMMETRIC
+        key-hex: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+  cryptography:
+    default-algorithm: AES_256_GCM
 ```
 
 See full property references and cloud KMS examples:

@@ -1,6 +1,6 @@
 package io.github.emmansun.lightcrypto.adapter.mongodb;
 
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.config.LightCryptoLinkAutoConfiguration;
 import io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
@@ -16,7 +16,9 @@ import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.mapping.context.MappingContext;
@@ -53,6 +55,8 @@ import java.util.List;
  */
 @AutoConfiguration(after = {LightCryptoLinkAutoConfiguration.class, MongoAutoConfiguration.class})
 @ConditionalOnClass(MongoTemplate.class)
+@ConditionalOnProperty(prefix = "lightcrypto.adapters.mongodb", name = "enabled", havingValue = "true", matchIfMissing = true)
+@EnableConfigurationProperties(MongoAdapterProperties.class)
 @EnableMongoRepositories(
         basePackages = "io.github.emmansun.lightcrypto",
         repositoryFactoryBeanClass = CryptoMongoRepositoryFactoryBean.class
@@ -63,8 +67,8 @@ public class MongoAdapterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(VaultStore.class)
-    public MongoVaultStore mongoVaultStore(MongoTemplate mongoTemplate) {
-        return new MongoVaultStore(mongoTemplate);
+    public MongoVaultStore mongoVaultStore(MongoTemplate mongoTemplate, MongoAdapterProperties adapterProperties) {
+        return new MongoVaultStore(mongoTemplate, adapterProperties.getKeyVaultCollection());
     }
 
     @Bean
@@ -99,8 +103,8 @@ public class MongoAdapterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(KeyVaultService.class)
     public KeyVaultService keyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
-                                           CryptoProperties properties) {
-        return new KeyVaultService(vaultStore, cmkProvider, properties);
+                                           KeyVaultProperties keyVaultProperties) {
+        return new KeyVaultService(vaultStore, cmkProvider, keyVaultProperties);
     }
 
     @Bean

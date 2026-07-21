@@ -30,26 +30,32 @@ import java.util.Optional;
  */
 public class MongoVaultStore implements VaultStore {
 
-    private static final String COLLECTION_NAME = "__lcl_keyvault";
+    private static final String DEFAULT_COLLECTION_NAME = "__lcl_keyvault";
     private static final String VAULT_ID_PREFIX = "lcl-dek-";
 
     private final MongoTemplate mongoTemplate;
+    private final String collectionName;
 
     public MongoVaultStore(MongoTemplate mongoTemplate) {
+        this(mongoTemplate, DEFAULT_COLLECTION_NAME);
+    }
+
+    public MongoVaultStore(MongoTemplate mongoTemplate, String collectionName) {
         this.mongoTemplate = mongoTemplate;
+        this.collectionName = (collectionName != null && !collectionName.isBlank()) ? collectionName : DEFAULT_COLLECTION_NAME;
     }
 
     @Override
     public void save(VaultDocument doc) {
         Document bsonDoc = toBsonDocument(doc);
-        mongoTemplate.save(bsonDoc, COLLECTION_NAME);
+        mongoTemplate.save(bsonDoc, collectionName);
     }
 
     @Override
     public Optional<VaultDocument> load(String namespace) {
         String vaultId = VAULT_ID_PREFIX + namespace;
         Query query = new Query(Criteria.where("_id").is(vaultId));
-        Document bsonDoc = mongoTemplate.findOne(query, Document.class, COLLECTION_NAME);
+        Document bsonDoc = mongoTemplate.findOne(query, Document.class, collectionName);
         if (bsonDoc == null) {
             return Optional.empty();
         }
@@ -60,7 +66,7 @@ public class MongoVaultStore implements VaultStore {
     public boolean exists(String namespace) {
         String vaultId = VAULT_ID_PREFIX + namespace;
         Query query = new Query(Criteria.where("_id").is(vaultId));
-        return mongoTemplate.exists(query, COLLECTION_NAME);
+        return mongoTemplate.exists(query, collectionName);
     }
 
     @Override
@@ -74,7 +80,7 @@ public class MongoVaultStore implements VaultStore {
                 .append("v", expectedVersion);
 
         UpdateResult result = mongoTemplate.getDb()
-                .getCollection(COLLECTION_NAME)
+                .getCollection(collectionName)
                 .replaceOne(filter, replacement);
 
         if (result.getMatchedCount() == 0) {
@@ -88,7 +94,7 @@ public class MongoVaultStore implements VaultStore {
 
     @Override
     public List<VaultDocument> loadAll() {
-        List<Document> docs = mongoTemplate.findAll(Document.class, COLLECTION_NAME);
+        List<Document> docs = mongoTemplate.findAll(Document.class, collectionName);
         List<VaultDocument> result = new ArrayList<>(docs.size());
         for (Document doc : docs) {
             result.add(fromBsonDocument(doc));

@@ -2,7 +2,8 @@ package io.github.emmansun.lightcrypto;
 
 import io.github.emmansun.lightcrypto.annotation.Encrypted;
 import io.github.emmansun.lightcrypto.annotation.SymmetricAlgorithm;
-import io.github.emmansun.lightcrypto.config.CryptoProperties;
+import io.github.emmansun.lightcrypto.config.CryptographyProperties;
+import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.exception.UnsupportedTypeException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
@@ -30,7 +31,7 @@ import static org.assertj.core.api.Assertions.*;
  */
 class EntityMetadataCacheTest {
 
-    private final EntityMetadataCache cache = new EntityMetadataCache(new CryptoProperties());
+    private final EntityMetadataCache cache = new EntityMetadataCache(new CryptographyProperties(), new TenantProperties());
 
     @Test
     void testUserHasOneEncryptedField() {
@@ -325,9 +326,9 @@ class EntityMetadataCacheTest {
 
     @Test
     void defaultAlgorithmComesFromCryptoProperties() {
-        CryptoProperties props = new CryptoProperties();
-        props.setAlgorithm(SymmetricAlgorithm.SM4_GCM);
-        EntityMetadataCache customCache = new EntityMetadataCache(props);
+        CryptographyProperties props = new CryptographyProperties();
+        props.setDefaultAlgorithm(SymmetricAlgorithm.SM4_GCM);
+        EntityMetadataCache customCache = new EntityMetadataCache(props, new TenantProperties());
 
         List<EncryptedFieldMetadata> fields = customCache.getEncryptedFields(TestUser.class);
 
@@ -337,9 +338,9 @@ class EntityMetadataCacheTest {
 
     @Test
     void explicitAlgorithmOverridesGlobalDefault() {
-        CryptoProperties props = new CryptoProperties();
-        props.setAlgorithm(SymmetricAlgorithm.SM4_GCM);
-        EntityMetadataCache customCache = new EntityMetadataCache(props);
+        CryptographyProperties props = new CryptographyProperties();
+        props.setDefaultAlgorithm(SymmetricAlgorithm.SM4_GCM);
+        EntityMetadataCache customCache = new EntityMetadataCache(props, new TenantProperties());
 
         List<EncryptedFieldMetadata> fields = customCache.getEncryptedFields(TestExplicitAlgorithmEntity.class);
 
