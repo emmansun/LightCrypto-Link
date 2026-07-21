@@ -40,7 +40,8 @@ import java.util.List;
         CryptographyProperties.class,
         KeyVaultProperties.class,
         KmsProperties.class,
-        TenantProperties.class
+        TenantProperties.class,
+        ObservabilityProperties.class
 })
 public class LightCryptoLinkAutoConfiguration {
 

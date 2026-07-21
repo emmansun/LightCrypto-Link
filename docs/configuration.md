@@ -54,6 +54,57 @@ Each `ProviderEntry`:
 | `mode` | `RuntimeMode` | `SPRING_BOOT` | `SPRING_BOOT`, `STANDALONE`, or `MIGRATION` |
 | `strict-mode` | `boolean` | `true` | When `true`, fail fast on configuration issues |
 
+## Observability (`lightcrypto.observability.*`)
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Master switch for all observability features |
+| `events.enabled` | `boolean` | `true` | Enable structured event logging via Slf4jEventBus |
+| `metrics.enabled` | `boolean` | `true` | Enable Micrometer metrics registration |
+| `metrics.publish-percentiles` | `boolean` | `true` | Publish Timer percentiles (p50, p95, p99) |
+| `health.enabled` | `boolean` | `true` | Enable Spring Boot Actuator HealthIndicator |
+
+### Example
+
+```yaml
+lightcrypto:
+  observability:
+    enabled: true
+    events:
+      enabled: true
+    metrics:
+      enabled: true
+      publish-percentiles: true
+    health:
+      enabled: true
+```
+
+### Metrics
+
+When enabled and Micrometer is on the classpath, LCL registers:
+
+| Metric | Type | Tags |
+|---|---|---|
+| `lcl.crypto.encrypt.duration` | Timer | algorithm, namespace |
+| `lcl.crypto.decrypt.duration` | Timer | algorithm, namespace |
+| `lcl.blind_index.compute.duration` | Timer | namespace |
+| `lcl.keyvault.load.duration` | Timer | namespace |
+| `lcl.rotation.duration` | Timer | namespace |
+| `lcl.crypto.encrypt.total` | Counter | algorithm, result |
+| `lcl.crypto.decrypt.total` | Counter | algorithm, result |
+| `lcl.rotation.total` | Counter | result |
+
+### Health Indicator
+
+When enabled and Spring Boot Actuator is on the classpath, LCL registers a `HealthIndicator` that reports:
+
+- **UP** — all components healthy (READY)
+- **OUT_OF_SERVICE** — one or more components degraded (DEGRADED)
+- **DOWN** — fatal error (FAILED)
+- **UNKNOWN** — initialization in progress (STARTING)
+
+Component checks: `core` (EventBus registered), `kms` (CmkProvider available), `vault` (KeyVaultService initialized).
+
 ## Adapter Configuration
 
 LCL requires a storage adapter module on the classpath. The adapter provides `VaultStore`, `StorageAdapter`, and `QueryTransformer` beans.

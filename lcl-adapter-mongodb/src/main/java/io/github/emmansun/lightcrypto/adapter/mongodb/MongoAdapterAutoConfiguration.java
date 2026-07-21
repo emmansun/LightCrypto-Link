@@ -3,6 +3,8 @@ package io.github.emmansun.lightcrypto.adapter.mongodb;
 import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.config.LightCryptoLinkAutoConfiguration;
 import io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine;
+import io.github.emmansun.lightcrypto.core.event.EventBus;
+import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
@@ -103,8 +105,9 @@ public class MongoAdapterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(KeyVaultService.class)
     public KeyVaultService keyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
-                                           KeyVaultProperties keyVaultProperties) {
-        return new KeyVaultService(vaultStore, cmkProvider, keyVaultProperties);
+                                           KeyVaultProperties keyVaultProperties,
+                                           @Lazy EventBus eventBus) {
+        return new KeyVaultService(vaultStore, cmkProvider, keyVaultProperties, eventBus);
     }
 
     @Bean
@@ -162,9 +165,10 @@ public class MongoAdapterAutoConfiguration {
                                                    TypeSerializer typeSerializer,
                                                    @Lazy KeyVaultService keyVaultService,
                                                    StorageAdapter storageAdapter,
-                                                   StructuredValueCodec structuredValueCodec) {
+                                                   StructuredValueCodec structuredValueCodec,
+                                                   @Lazy EventBus eventBus) {
         return new MongoEncryptHandler(metadataCache, typeSerializer, keyVaultService,
-                storageAdapter, structuredValueCodec);
+                storageAdapter, structuredValueCodec, eventBus);
     }
 
     @Bean
@@ -180,9 +184,10 @@ public class MongoAdapterAutoConfiguration {
                                                              KeyVaultService keyVaultService,
                                                              BlindIndexEngine blindIndexEngine,
                                                              StorageAdapter storageAdapter,
-                                                             StructuredValueCodec structuredValueCodec) {
+                                                             StructuredValueCodec structuredValueCodec,
+                                                             @Lazy EventBus eventBus) {
         return new CryptoBeforeSaveListener(metadataCache, typeSerializer, keyVaultService,
-                blindIndexEngine, storageAdapter, structuredValueCodec);
+                blindIndexEngine, storageAdapter, structuredValueCodec, eventBus);
     }
 
     // ===== Query rewriting =====

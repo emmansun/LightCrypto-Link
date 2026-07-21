@@ -40,6 +40,7 @@ Deep docs are in [docs](docs/):
 - Per-namespace multi-DEK vault with versioned `kid` and Wire Format V1 self-describing blobs
 - Pluggable storage adapters (MongoDB adapter included; SPI for JDBC, Elasticsearch, etc.)
 - Pluggable CMK providers (local, Azure Key Vault, Alibaba Cloud KMS)
+- **Observability**: structured events, Micrometer metrics, Spring Boot Actuator health indicator
 
 ## Quick Start
 
@@ -163,6 +164,47 @@ keyVaultService.rotateDek("default.default.User#phone");
 ```
 
 For behavior details, see [docs/architecture.md](docs/architecture.md).
+
+## Observability
+
+LCL provides built-in observability features (enabled by default):
+
+### Structured Events
+
+All crypto operations emit structured events via `EventBus`:
+
+```json
+{"event":"lcl.crypto.encrypt.completed","tier":"L2","result":"success","algorithm":"AES_256_GCM","durationMicros":240}
+```
+
+### Micrometer Metrics
+
+When Micrometer is on the classpath, LCL registers timers and counters:
+
+- `lcl.crypto.encrypt.duration` / `lcl.crypto.decrypt.duration`
+- `lcl.rotation.duration` / `lcl.keyvault.load.duration`
+- `lcl.crypto.encrypt.total` / `lcl.crypto.decrypt.total`
+
+### Health Indicator
+
+When Spring Boot Actuator is on the classpath, LCL registers a `HealthIndicator`:
+
+- **UP** — all components healthy
+- **OUT_OF_SERVICE** — degraded
+- **DOWN** — fatal error
+
+### Configuration
+
+```yaml
+lightcrypto:
+  observability:
+    enabled: true          # master switch
+    events.enabled: true   # structured logging
+    metrics.enabled: true  # Micrometer metrics
+    health.enabled: true   # Actuator health
+```
+
+See [docs/configuration.md](docs/configuration.md) for full reference.
 
 ## Examples
 

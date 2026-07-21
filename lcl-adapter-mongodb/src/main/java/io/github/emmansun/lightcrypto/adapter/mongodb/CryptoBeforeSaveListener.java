@@ -2,6 +2,10 @@ package io.github.emmansun.lightcrypto.adapter.mongodb;
 
 import io.github.emmansun.lightcrypto.core.CryptoCodec;
 import io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine;
+import io.github.emmansun.lightcrypto.core.event.EventBus;
+import io.github.emmansun.lightcrypto.core.event.EventTier;
+import io.github.emmansun.lightcrypto.core.event.LclEvent;
+import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.exception.EncryptionException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
@@ -41,6 +45,7 @@ public class CryptoBeforeSaveListener {
     private final BlindIndexEngine blindIndexEngine;
     private final StorageAdapter storageAdapter;
     private final StructuredValueCodec structuredValueCodec;
+    private final EventBus eventBus;
 
     public CryptoBeforeSaveListener(EntityMetadataCache metadataCache,
                                     TypeSerializer typeSerializer,
@@ -48,12 +53,24 @@ public class CryptoBeforeSaveListener {
                                     BlindIndexEngine blindIndexEngine,
                                     StorageAdapter storageAdapter,
                                     StructuredValueCodec structuredValueCodec) {
+        this(metadataCache, typeSerializer, keyVaultService, blindIndexEngine,
+                storageAdapter, structuredValueCodec, NoOpEventBus.INSTANCE);
+    }
+
+    public CryptoBeforeSaveListener(EntityMetadataCache metadataCache,
+                                    TypeSerializer typeSerializer,
+                                    KeyVaultService keyVaultService,
+                                    BlindIndexEngine blindIndexEngine,
+                                    StorageAdapter storageAdapter,
+                                    StructuredValueCodec structuredValueCodec,
+                                    EventBus eventBus) {
         this.metadataCache = metadataCache;
         this.typeSerializer = typeSerializer;
         this.keyVaultService = keyVaultService;
         this.blindIndexEngine = blindIndexEngine;
         this.storageAdapter = storageAdapter;
         this.structuredValueCodec = structuredValueCodec;
+        this.eventBus = eventBus != null ? eventBus : NoOpEventBus.INSTANCE;
     }
 
     @EventListener
@@ -216,8 +233,21 @@ public class CryptoBeforeSaveListener {
         int dekVersion = keyVaultService.getActiveDekVersion(namespace);
         byte[] dek = keyVaultService.getDek(keyVaultService.getActiveKid(namespace));
 
+        long startNanos = System.nanoTime();
         // Wire Format V1: returns Base64URL-encoded self-describing blob
         String blob = CryptoCodec.encrypt(dek, serialized, meta.algorithmId(), meta.namespace(), dekVersion);
+        long durationMicros = (System.nanoTime() - startNanos) / 1000;
+
+        // Emit encrypt timing event
+        eventBus.emit(LclEvent.builder()
+                .event("lcl.crypto.encrypt.completed")
+                .tier(EventTier.L2)
+                .result("success")
+                .namespace(namespace)
+                .algorithm(meta.algorithmId().name())
+                .dekVersion(dekVersion)
+                .durationMicros(durationMicros)
+                .build());
 
         // Compute blind index if enabled
         String blindIndex = null;

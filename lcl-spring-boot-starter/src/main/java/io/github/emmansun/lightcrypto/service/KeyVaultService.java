@@ -1,6 +1,10 @@
 package io.github.emmansun.lightcrypto.service;
 
 import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
+import io.github.emmansun.lightcrypto.core.event.EventBus;
+import io.github.emmansun.lightcrypto.core.event.EventTier;
+import io.github.emmansun.lightcrypto.core.event.LclEvent;
+import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
@@ -42,13 +46,19 @@ public class KeyVaultService {
     private final CmkProvider cmkProvider;
     private final Duration cacheTtl;
     private final Clock clock;
+    private final EventBus eventBus;
 
     /** Per-namespace key contexts: canonicalNamespace -> NamespaceKeyContext. */
     private final ConcurrentHashMap<String, NamespaceKeyContext> namespaceKeyContexts = new ConcurrentHashMap<>();
 
     public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
                            KeyVaultProperties keyVaultProperties) {
-        this(vaultStore, cmkProvider, keyVaultProperties, Clock.systemUTC());
+        this(vaultStore, cmkProvider, keyVaultProperties, Clock.systemUTC(), NoOpEventBus.INSTANCE);
+    }
+
+    public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
+                           KeyVaultProperties keyVaultProperties, EventBus eventBus) {
+        this(vaultStore, cmkProvider, keyVaultProperties, Clock.systemUTC(), eventBus);
     }
 
     /**
@@ -56,12 +66,21 @@ public class KeyVaultService {
      */
     public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
                     KeyVaultProperties keyVaultProperties, Clock clock) {
+        this(vaultStore, cmkProvider, keyVaultProperties, clock, NoOpEventBus.INSTANCE);
+    }
+
+    /**
+     * Full constructor with EventBus and Clock.
+     */
+    public KeyVaultService(VaultStore vaultStore, CmkProvider cmkProvider,
+                    KeyVaultProperties keyVaultProperties, Clock clock, EventBus eventBus) {
         this.vaultStore = vaultStore;
         this.cmkProvider = cmkProvider;
         this.cacheTtl = keyVaultProperties != null && keyVaultProperties.getCache() != null
                 ? keyVaultProperties.getCache().getTtl()
                 : Duration.ofHours(1);
         this.clock = clock;
+        this.eventBus = eventBus != null ? eventBus : NoOpEventBus.INSTANCE;
     }
 
     /**
@@ -205,7 +224,13 @@ public class KeyVaultService {
 
             verifyAndLoadKeys(updatedDoc, namespace);
 
-            log.info("DEK rotated for namespace {}: new active kid = {}", namespace, newKid);
+            eventBus.emit(LclEvent.builder()
+                    .event("lcl.rotation.execute.completed")
+                    .tier(EventTier.L2)
+                    .result("success")
+                    .namespace(namespace)
+                    .attribute("kid", newKid)
+                    .build());
         }
     }
 
@@ -223,7 +248,12 @@ public class KeyVaultService {
     }
 
     private VaultDocument initializeVault(String namespace) {
-        log.info("Initializing key vault for namespace: {}", namespace);
+        eventBus.emit(LclEvent.builder()
+                .event("lcl.keyvault.init.completed")
+                .tier(EventTier.L2)
+                .result("success")
+                .namespace(namespace)
+                .build());
 
         String kid = generateKid(1);
         KeyEntry entry = createKeyEntry(kid);
@@ -341,7 +371,14 @@ public class KeyVaultService {
                 namespaceKeyContexts.put(namespace, ctx);
             }
 
-            log.info("Key vault loaded and verified: {} (active kid: {}, version: {})", namespace, activeKid, activeDekVersion);
+            eventBus.emit(LclEvent.builder()
+                    .event("lcl.keyvault.load.completed")
+                    .tier(EventTier.L2)
+                    .result("success")
+                    .namespace(namespace)
+                    .attribute("activeKid", activeKid)
+                    .attribute("dekVersion", String.valueOf(activeDekVersion))
+                    .build());
         } catch (FatalCryptoException e) {
             throw e;
         } catch (Exception e) {
@@ -380,7 +417,11 @@ public class KeyVaultService {
                 destroyKeyMaterial(ctx);
             }
             namespaceKeyContexts.clear();
-            log.info("DEK cache flushed; all key material securely zeroed");
+            eventBus.emit(LclEvent.builder()
+                    .event("lcl.keyvault.cache.evicted")
+                    .tier(EventTier.L1)
+                    .result("success")
+                    .build());
         }
     }
 

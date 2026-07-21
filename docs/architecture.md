@@ -20,9 +20,9 @@ LCL uses envelope encryption:
 | Module | Responsibility |
 |--------|---------------|
 | `lcl-spi` | Pure interfaces: `VaultStore`, `StorageAdapter`, `QueryTransformer`, `EncryptHandler`, `DecryptHandler` — no Spring/DB dependencies |
-| `lcl-core` | Cryptographic primitives: `CryptoCodec`, wire format, blind index, namespace model |
+| `lcl-core` | Cryptographic primitives: `CryptoCodec`, wire format, blind index, namespace model, **EventBus SPI** |
 | `lcl-adapter-mongodb` | MongoDB-specific implementations: `MongoVaultStore`, `MongoStorageAdapter`, `MongoQueryTransformer` |
-| `lcl-spring-boot-starter` | Auto-configuration, event listeners, query rewriting, field encryption service |
+| `lcl-spring-boot-starter` | Auto-configuration, event listeners, query rewriting, field encryption service, **observability** |
 | `lcl-provider-*` | CMK provider implementations (Alibaba KMS, Azure Key Vault) |
 
 ## Vault Model
@@ -110,3 +110,49 @@ LCL separates storage concerns from cryptographic orchestration via three SPI in
   Implementation: `MongoQueryTransformer`.
 
 This separation allows future adapter modules (e.g., `lcl-adapter-jdbc`, `lcl-adapter-elasticsearch`) without modifying core or starter code.
+
+## EventBus SPI (Observability)
+
+LCL provides a structured event model for observability, defined in `lcl-core` with zero framework dependencies:
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│ lcl-core (io.github.emmansun.lightcrypto.core.event)    │
+│   ├─ EventBus (functional interface)                    │
+│   ├─ LclEvent (immutable event model)                   │
+│   ├─ EventTier (L1/L2/L3 classification)                │
+│   ├─ NoOpEventBus (default singleton)                   │
+│   └─ CompositeEventBus (multi-delegate with isolation)  │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│ lcl-spring-boot-starter (observability package)         │
+│   ├─ Slf4jEventBus (structured JSON logging)            │
+│   ├─ MicrometerEventBus (metrics adapter)               │
+│   ├─ LclMetrics (Timer/Counter/Gauge definitions)       │
+│   └─ LclHealthIndicator (Actuator integration)          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Event Naming Convention
+
+Events follow the pattern: `lcl.<subsystem>.<operation>.<status>`
+
+Examples:
+- `lcl.crypto.encrypt.completed` — field encryption finished
+- `lcl.keyvault.load.completed` — vault document loaded
+- `lcl.rotation.execute.completed` — DEK rotation finished
+- `lcl.keyvault.cache.evicted` — cache entry evicted
+
+### Event Tiers
+
+| Tier | Purpose | Delivery |
+|------|---------|----------|
+| L1 | Diagnostic | Best-effort |
+| L2 | Operational | Reliable |
+| L3 | Audit | Guaranteed |
+
+### Security Constraint
+
+Events MUST NEVER contain: IV, Tag, Ciphertext, Wrapped DEK, CMK material, Plaintext values, Query values, or Personal data.
