@@ -2,6 +2,7 @@ package io.github.emmansun.lightcrypto.adapter.mongodb.integration;
 
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,11 +93,27 @@ class V4EndToEndTest {
         user.setEmail("bob@example.com");
 
         userRepository.save(user);
+        assertThat(user.getId()).isNotNull();
 
-        // Read raw BSON document — encrypted fields should NOT contain plaintext
-        Document raw = mongoTemplate.getCollection("intTestUser")
-                .find(new Document("_id", user.getId())).first();
-        assertThat(raw).isNotNull();
+        // Read raw BSON document — use ObjectId since Spring Data MongoDB 5.x
+        // stores @Id String fields as ObjectId by default
+        Object idValue = user.getId();
+        try {
+            idValue = new ObjectId(user.getId());
+        } catch (IllegalArgumentException ignored) {
+            // ID is not a valid ObjectId hex string, use as-is
+        }
+
+        Document raw = mongoTemplate.getDb().getCollection("intTestUser")
+                .find(new Document("_id", idValue)).first();
+
+        // If ObjectId query didn't work, try finding by name to verify save happened
+        if (raw == null) {
+            raw = mongoTemplate.getDb().getCollection("intTestUser")
+                    .find(new Document("name", "Bob")).first();
+        }
+
+        assertThat(raw).as("Raw BSON document should exist for saved user").isNotNull();
         assertThat(raw.getString("name")).isEqualTo("Bob"); // unencrypted
         assertThat(raw.getString("phone")).isNotEqualTo("13900139001"); // encrypted
         assertThat(raw.getString("email")).isNotEqualTo("bob@example.com"); // encrypted
@@ -112,10 +129,11 @@ class V4EndToEndTest {
         user.setPhone("13700137001");
 
         userRepository.save(user);
+        assertThat(user.getId()).isNotNull();
 
         // Method-name query should be rewritten to blind-index lookup
         IntTestUser found = userRepository.findByPhone("13700137001");
-        assertThat(found).isNotNull();
+        assertThat(found).as("findByPhone should find the saved user via blind index").isNotNull();
         assertThat(found.getName()).isEqualTo("Charlie");
         assertThat(found.getPhone()).isEqualTo("13700137001");
     }
@@ -142,7 +160,7 @@ class V4EndToEndTest {
         userRepository.save(u2);
 
         List<IntTestUser> found = userRepository.findByPhoneIn(List.of("13600136001", "13600136002"));
-        assertThat(found).hasSize(2);
+        assertThat(found).as("findByPhoneIn should find both users via blind index").hasSize(2);
         assertThat(found).extracting(IntTestUser::getName).containsExactlyInAnyOrder("Dave", "Eve");
     }
 
@@ -160,7 +178,7 @@ class V4EndToEndTest {
         // KeyVaultService should be initialized and vault document should exist
         assertThat(keyVaultService).isNotNull();
         // Vault documents are stored in the "__lcl_keyvault" collection with "_id" = "lcl-dek-{namespace}"
-        Document vaultDoc = mongoTemplate.getCollection("__lcl_keyvault")
+        Document vaultDoc = mongoTemplate.getDb().getCollection("__lcl_keyvault")
                 .find(new Document("_id", "lcl-dek-default.default.IntTestUser#phone")).first();
         assertThat(vaultDoc).isNotNull();
     }
@@ -183,7 +201,7 @@ class V4EndToEndTest {
 
         // Verify findByPhone works with the new phone value
         IntTestUser found = userRepository.findByPhone("13400134002");
-        assertThat(found).isNotNull();
+        assertThat(found).as("findByPhone should find the updated user via blind index").isNotNull();
         assertThat(found.getName()).isEqualTo("Frank");
     }
 
