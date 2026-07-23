@@ -36,27 +36,30 @@ import java.util.List;
 /**
  * Spring Boot 4.x auto-configuration for MongoDB storage adapter.
  *
- * <p>This is the SB4-compatible variant of {@code MongoAdapterAutoConfiguration}.
- * It imports {@code MongoAutoConfiguration} from the SB4 package path
- * ({@code org.springframework.boot.mongodb.autoconfigure}).
+ * <p>This is the SB4-compatible variant, using a distinct class name
+ * ({@code MongoAdapterV4AutoConfiguration}) to avoid the same-FQCN conflict
+ * with the SB3 adapter's {@code MongoAdapterAutoConfiguration}.
  *
- * <p>Activates when {@link MongoTemplate} is on the classpath and after
- * {@link LightCryptoLinkAutoConfiguration} has registered core beans.
- * The {@code @ConditionalOnMissingBean} guard prevents simultaneous activation
- * with the SB3 adapter ({@code lcl-adapter-mongodb}).
+ * <p>It imports {@code MongoAutoConfiguration} from the SB4 package path
+ * ({@code org.springframework.boot.mongodb.autoconfigure}) and registers
+ * a {@link CryptoMongoRepositoryFactory} that uses {@link ValueExpressionDelegate}
+ * (spring-data-mongodb 5.x API).
+ *
+ * <p>When both SB3 and v4 adapters are on the classpath, use
+ * {@code spring.autoconfigure.exclude} to disable the SB3 adapter's auto-config,
+ * ensuring only this v4 variant is active.
  *
  * @since 1.0.0
  */
 @AutoConfiguration(after = {LightCryptoLinkAutoConfiguration.class, MongoAutoConfiguration.class})
 @ConditionalOnClass(MongoTemplate.class)
 @ConditionalOnProperty(prefix = "lightcrypto.adapters.mongodb", name = "enabled", havingValue = "true", matchIfMissing = true)
-@ConditionalOnMissingBean(MongoVaultStore.class)
 @EnableConfigurationProperties(MongoAdapterProperties.class)
 @EnableMongoRepositories(
         basePackages = "io.github.emmansun.lightcrypto",
         repositoryFactoryBeanClass = CryptoMongoRepositoryFactoryBean.class
 )
-public class MongoAdapterAutoConfiguration {
+public class MongoAdapterV4AutoConfiguration {
 
     // ===== Infrastructure beans =====
 

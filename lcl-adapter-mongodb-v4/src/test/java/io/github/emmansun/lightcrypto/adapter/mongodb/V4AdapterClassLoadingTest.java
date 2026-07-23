@@ -22,7 +22,7 @@ class V4AdapterClassLoadingTest {
 
     @Test
     void autoConfigurationClassExists() {
-        assertThat(MongoAdapterAutoConfiguration.class).isNotNull();
+        assertThat(MongoAdapterV4AutoConfiguration.class).isNotNull();
     }
 
     @Test
@@ -50,9 +50,9 @@ class V4AdapterClassLoadingTest {
 
     @Test
     void autoConfigurationUsesCorrectMongoPackage() {
-        // Verify MongoAdapterAutoConfiguration imports SB4 MongoAutoConfiguration
+        // Verify MongoAdapterV4AutoConfiguration imports SB4 MongoAutoConfiguration
         // by checking it compiles against the new package
-        assertThat(MongoAdapterAutoConfiguration.class.getAnnotations()).isNotEmpty();
+        assertThat(MongoAdapterV4AutoConfiguration.class.getAnnotations()).isNotEmpty();
     }
 
     @Test
