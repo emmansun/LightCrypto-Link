@@ -9,7 +9,7 @@ multi-DEK envelope encryption with key rotation support, pluggable storage adapt
 [![codecov](https://codecov.io/gh/emmansun/LightCrypto-Link/graph/badge.svg?token=d6cfb4Z53D)](https://codecov.io/gh/emmansun/LightCrypto-Link)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2%2B-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2%2B%20%7C%204.0%2B-brightgreen.svg)](https://spring.io/projects/spring-boot)
 ![Maven Central Version](https://img.shields.io/maven-central/v/io.github.emmansun/lcl-spring-boot-starter)
 
 ---
@@ -67,13 +67,24 @@ Add the starter dependency:
   <artifactId>lcl-spring-boot-starter</artifactId>
   <version>${lcl.version}</version>
 </dependency>
-<!-- Storage adapter (required — choose one) -->
+<!-- Storage adapter (required — choose one matching your Spring Boot version) -->
+<!-- Spring Boot 3.x -->
 <dependency>
   <groupId>io.github.emmansun</groupId>
   <artifactId>lcl-adapter-mongodb</artifactId>
   <version>${lcl.version}</version>
 </dependency>
+<!-- Spring Boot 4.x (use -v4 variant) -->
+<!--
+<dependency>
+  <groupId>io.github.emmansun</groupId>
+  <artifactId>lcl-adapter-mongodb-v4</artifactId>
+  <version>${lcl.version}</version>
+</dependency>
+-->
 ```
+
+> **Adapter selection**: Use `lcl-adapter-mongodb` for Spring Boot 3.x, or `lcl-adapter-mongodb-v4` for Spring Boot 4.x. Do **not** include both — only one adapter should be on the classpath.
 
 Cloud KMS modules:
 
@@ -269,7 +280,8 @@ mvn clean verify
 LightCrypto-Link/
 |- lcl-spi/                              # SPI contracts (CmkProvider, WrappedKey, VaultStore, StorageAdapter, QueryTransformer)
 |- lcl-core/                             # Pure crypto core (Wire Format V1, CryptoCodec, BlindIndexEngine, KCV)
-|- lcl-adapter-mongodb/                  # MongoDB storage adapter (MongoVaultStore, MongoStorageAdapter, MongoQueryTransformer)
+|- lcl-adapter-mongodb/                  # MongoDB storage adapter — Spring Boot 3.x
+|- lcl-adapter-mongodb-v4/               # MongoDB storage adapter — Spring Boot 4.x (ValueExpressionDelegate)
 |- lcl-spring-boot-starter/              # Core starter (annotation-driven encryption)
 |- lcl-provider-azure-kms/               # Azure Key Vault CMK provider
 |- lcl-provider-alibaba-kms/             # Alibaba Cloud KMS CMK provider

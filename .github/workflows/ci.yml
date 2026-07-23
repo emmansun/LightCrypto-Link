@@ -38,6 +38,9 @@ jobs:
       - name: Build & Test
         run: mvn -B clean verify
 
+      - name: SB4 Integration Test
+        run: mvn -B -pl lcl-adapter-mongodb-v4 -am test
+
       - name: Install Core Artifacts for Module-Scoped Checks
         run: mvn -B -pl lcl-spi,lcl-core -am -DskipTests install
 

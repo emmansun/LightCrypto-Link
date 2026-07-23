@@ -39,8 +39,9 @@
     <modules>
         <module>lcl-spi</module>
         <module>lcl-core</module>
-        <module>lcl-adapter-mongodb</module>
         <module>lcl-spring-boot-starter</module>
+        <module>lcl-adapter-mongodb</module>
+        <module>lcl-adapter-mongodb-v4</module>
         <module>lcl-provider-azure-kms</module>
         <module>lcl-provider-alibaba-kms</module>
         <module>lcl-examples</module>
@@ -53,6 +54,8 @@
 
         <!-- Dependency versions -->
         <spring-boot.version>3.2.5</spring-boot.version>
+        <spring-data-commons.version>3.2.5</spring-data-commons.version>
+        <micrometer.version>1.12.5</micrometer.version>
         <bouncycastle.version>1.85</bouncycastle.version>
         <azure.keyvault.keys.version>4.11.1</azure.keyvault.keys.version>
         <azure.identity.version>1.18.4</azure.identity.version>
@@ -92,6 +95,11 @@
             </dependency>
             <dependency>
                 <groupId>io.github.emmansun</groupId>
+                <artifactId>lcl-adapter-mongodb-v4</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.emmansun</groupId>
                 <artifactId>lcl-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -118,7 +126,7 @@
             <dependency>
                 <groupId>org.springframework.data</groupId>
                 <artifactId>spring-data-commons</artifactId>
-                <version>3.2.5</version>
+                <version>${spring-data-commons.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
@@ -148,7 +156,7 @@
             <dependency>
                 <groupId>io.micrometer</groupId>
                 <artifactId>micrometer-core</artifactId>
-                <version>1.12.5</version>
+                <version>${micrometer.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
@@ -236,6 +244,15 @@
     </build>
 
     <profiles>
+        <!-- SB4 compile verification profile: mvn compile -Psb4 -->
+        <profile>
+            <id>sb4</id>
+            <properties>
+                <spring-boot.version>4.0.7</spring-boot.version>
+                <spring-data-commons.version>4.0.5</spring-data-commons.version>
+                <micrometer.version>1.15.12</micrometer.version>
+            </properties>
+        </profile>
         <profile>
             <id>central</id>
             <build>
