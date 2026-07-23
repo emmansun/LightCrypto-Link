@@ -6,11 +6,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.testcontainers.containers.MongoDBContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -21,8 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * End-to-end integration tests for the Spring Boot 4.x adapter module.
  *
- * <p>Uses Testcontainers MongoDB when Docker is available, otherwise falls back
- * to a MongoDB instance on localhost:27017 (e.g. GitHub Actions service container).
+ * <p>Connects to a MongoDB instance at localhost:27017 (provided by the CI
+ * service container or a local MongoDB). Tests are skipped when MongoDB is
+ * not reachable.
  *
  * <p>Tests verify that:
  * <ul>
@@ -32,50 +29,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Data stored in MongoDB is actually encrypted on disk</li>
  * </ul>
  */
-@Testcontainers
 @SpringBootTest(classes = IntTestApplication.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@EnabledIf(value = "mongoAvailable", disabledReason = "MongoDB not available")
+@EnabledIf(value = "mongoAvailable", disabledReason = "MongoDB not available on localhost:27017")
 class V4EndToEndTest {
 
     private static final int MONGO_PORT = 27017;
 
     /**
-     * Testcontainers MongoDB — started only if Docker is available.
-     * The {@code @ServiceConnection} annotation auto-configures the MongoDB connection URI.
-     */
-    @Container
-    @ServiceConnection
-    static MongoDBContainer mongo;
-
-    static {
-        if (isDockerAvailable()) {
-            mongo = new MongoDBContainer("mongo:6.0");
-        }
-    }
-
-    /**
-     * Check if MongoDB is reachable (either Testcontainers or localhost).
+     * Check if MongoDB is reachable at localhost:27017.
      */
     @SuppressWarnings("unused")
     static boolean mongoAvailable() {
-        if (isDockerAvailable()) {
-            return true;
-        }
-        // Fallback: check localhost:27017
         try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress("localhost", MONGO_PORT), 1000);
+            s.connect(new InetSocketAddress("localhost", MONGO_PORT), 2000);
             return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private static boolean isDockerAvailable() {
-        try {
-            Process p = Runtime.getRuntime().exec(new String[]{"docker", "info"});
-            int exit = p.waitFor();
-            return exit == 0;
         } catch (Exception e) {
             return false;
         }
@@ -191,8 +159,9 @@ class V4EndToEndTest {
 
         // KeyVaultService should be initialized and vault document should exist
         assertThat(keyVaultService).isNotNull();
-        Document vaultDoc = mongoTemplate.getCollection("vault")
-                .find(new Document("namespace", "default.default.IntTestUser#phone")).first();
+        // Vault documents are stored in the "__lcl_keyvault" collection with "_id" = "lcl-dek-{namespace}"
+        Document vaultDoc = mongoTemplate.getCollection("__lcl_keyvault")
+                .find(new Document("_id", "lcl-dek-default.default.IntTestUser#phone")).first();
         assertThat(vaultDoc).isNotNull();
     }
 
