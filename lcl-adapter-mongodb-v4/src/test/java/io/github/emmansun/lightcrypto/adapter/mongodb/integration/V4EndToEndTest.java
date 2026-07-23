@@ -1,5 +1,7 @@
 package io.github.emmansun.lightcrypto.adapter.mongodb.integration;
 
+import io.github.emmansun.lightcrypto.adapter.mongodb.CryptoMongoQueryCreator;
+import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -8,6 +10,8 @@ import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.BasicQuery;
+import org.springframework.data.mongodb.core.query.Query;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -59,6 +63,12 @@ class V4EndToEndTest {
     @Autowired
     private KeyVaultService keyVaultService;
 
+    @Autowired
+    private CryptoMongoQueryCreator cryptoMongoQueryCreator;
+
+    @Autowired
+    private EntityMetadataCache entityMetadataCache;
+
     @BeforeEach
     void cleanCollections() {
         mongoTemplate.dropCollection(IntTestUser.class);
@@ -107,7 +117,7 @@ class V4EndToEndTest {
         Document raw = mongoTemplate.getDb().getCollection("intTestUser")
                 .find(new Document("_id", idValue)).first();
 
-        // If ObjectId query didn't work, try finding by name to verify save happened
+        // Fallback: find by name if ObjectId query didn't work
         if (raw == null) {
             raw = mongoTemplate.getDb().getCollection("intTestUser")
                     .find(new Document("name", "Bob")).first();
@@ -115,14 +125,45 @@ class V4EndToEndTest {
 
         assertThat(raw).as("Raw BSON document should exist for saved user").isNotNull();
         assertThat(raw.getString("name")).isEqualTo("Bob"); // unencrypted
-        assertThat(raw.getString("phone")).isNotEqualTo("13900139001"); // encrypted
-        assertThat(raw.getString("email")).isNotEqualTo("bob@example.com"); // encrypted
+
+        // Encrypted fields are stored as sub-documents {v, c, iv, ...}, not plain strings
+        Object phoneRaw = raw.get("phone");
+        Object emailRaw = raw.get("email");
+        assertThat(phoneRaw).as("phone should be stored as encrypted sub-document").isInstanceOf(Document.class);
+        assertThat(emailRaw).as("email should be stored as encrypted sub-document").isInstanceOf(Document.class);
     }
 
     // ===== Blind Index Query =====
 
+    /**
+     * Diagnostic: verify that CryptoMongoQueryCreator can rewrite queries directly.
+     * This isolates whether the issue is in the query creator or in the repository layer.
+     */
     @Test
     @Order(3)
+    void queryCreatorRewritesEncryptedFields() {
+        // Ensure vault is initialized for the phone namespace
+        IntTestUser user = new IntTestUser();
+        user.setName("DiagTest");
+        user.setPhone("13000000001");
+        userRepository.save(user);
+
+        // Build a simple query: {phone: "13700137001"}
+        Query original = new BasicQuery(new Document("phone", "13700137001"));
+
+        // Rewrite using CryptoMongoQueryCreator
+        Query rewritten = cryptoMongoQueryCreator.rewrite(original, IntTestUser.class);
+        Document rewrittenDoc = rewritten.getQueryObject();
+
+        // The rewritten query should NOT contain the original "phone" field name
+        // It should be replaced with a blind-index field name (e.g., "__bi_phone")
+        assertThat(rewrittenDoc.containsKey("phone"))
+                .as("Query should be rewritten: 'phone' field should be replaced with blind-index field")
+                .isFalse();
+    }
+
+    @Test
+    @Order(4)
     void blindIndexQueryRewrite() {
         IntTestUser user = new IntTestUser();
         user.setName("Charlie");
@@ -139,14 +180,14 @@ class V4EndToEndTest {
     }
 
     @Test
-    @Order(4)
+    @Order(5)
     void blindIndexQueryReturnsNullForNonExistent() {
         IntTestUser found = userRepository.findByPhone("99999999999");
         assertThat(found).isNull();
     }
 
     @Test
-    @Order(5)
+    @Order(6)
     void blindIndexInQuery() {
         IntTestUser u1 = new IntTestUser();
         u1.setName("Dave");
@@ -167,7 +208,7 @@ class V4EndToEndTest {
     // ===== KeyVault Service =====
 
     @Test
-    @Order(6)
+    @Order(7)
     void vaultAutoInitializes() {
         // Trigger vault initialization via a save operation
         IntTestUser user = new IntTestUser();
@@ -186,7 +227,7 @@ class V4EndToEndTest {
     // ===== Update and Delete =====
 
     @Test
-    @Order(7)
+    @Order(8)
     void updateReEncryptsField() {
         IntTestUser user = new IntTestUser();
         user.setName("Frank");
@@ -206,7 +247,7 @@ class V4EndToEndTest {
     }
 
     @Test
-    @Order(8)
+    @Order(9)
     void deleteRemovesDocument() {
         IntTestUser user = new IntTestUser();
         user.setName("Grace");
