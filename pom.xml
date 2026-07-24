@@ -54,7 +54,7 @@
 
         <!-- Dependency versions -->
         <spring-boot.version>3.2.5</spring-boot.version>
-        <spring-data-commons.version>3.2.5</spring-data-commons.version>
+        <spring-data-commons.version>4.1.0</spring-data-commons.version>
         <micrometer.version>1.17.0</micrometer.version>
         <bouncycastle.version>1.85</bouncycastle.version>
         <azure.keyvault.keys.version>4.11.1</azure.keyvault.keys.version>
