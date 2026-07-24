@@ -1,26 +1,29 @@
 package io.github.emmansun.lightcrypto.observability;
 
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.boot.health.contributor.Status;
 
 import java.util.Map;
 
 /**
- * Spring Boot 3.x Actuator {@link HealthIndicator} for Light Crypto Link.
+ * Spring Boot 4.x health indicator for Light Crypto Link.
  * <p>
  * This is a thin shell that delegates to {@link LclHealthCollector} for
  * the actual health composition logic.
+ * <p>
+ * Implements the SB4 {@code org.springframework.boot.health.contributor.HealthIndicator}
+ * interface (health was split from actuator in Spring Boot 4.x).
  * <p>
  * Status mapping: READY→UP, DEGRADED→OUT_OF_SERVICE, FAILED→DOWN, STARTING→UNKNOWN.
  *
  * @since 1.0.0
  */
-public class LclHealthIndicator implements HealthIndicator {
+public class LclHealthIndicatorV4 implements HealthIndicator {
 
     private final LclHealthCollector collector;
 
-    public LclHealthIndicator(Map<String, ComponentHealthCheck> checks) {
+    public LclHealthIndicatorV4(Map<String, ComponentHealthCheck> checks) {
         this.collector = new LclHealthCollector(checks);
     }
 

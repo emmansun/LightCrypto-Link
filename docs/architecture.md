@@ -21,7 +21,9 @@ LCL uses envelope encryption:
 |--------|---------------|
 | `lcl-spi` | Pure interfaces: `VaultStore`, `StorageAdapter`, `QueryTransformer`, `EncryptHandler`, `DecryptHandler` — no Spring/DB dependencies |
 | `lcl-core` | Cryptographic primitives: `CryptoCodec`, wire format, blind index, namespace model, **EventBus SPI** |
-| `lcl-adapter-mongodb` | MongoDB-specific implementations: `MongoVaultStore`, `MongoStorageAdapter`, `MongoQueryTransformer` |
+| `lcl-adapter-mongodb-core` | Version-independent shared MongoDB classes: `MongoVaultStore`, `MongoStorageAdapter`, `MongoQueryTransformer`, listeners, handlers |
+| `lcl-adapter-mongodb` | Spring Boot 3.x query layer: `CryptoMongoRepositoryFactory`, `CryptoPartTreeMongoQuery`, auto-configuration |
+| `lcl-adapter-mongodb-v4` | Spring Boot 4.x query layer: adapted for `ValueExpressionDelegate`, auto-configuration |
 | `lcl-spring-boot-starter` | Auto-configuration, event listeners, query rewriting, field encryption service, **observability** |
 | `lcl-provider-*` | CMK provider implementations (Alibaba KMS, Azure Key Vault) |
 

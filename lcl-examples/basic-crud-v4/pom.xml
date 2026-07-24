@@ -23,29 +23,19 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Direct declarations OVERRIDE parent POM's managed versions (3.2.5) -->
-            <dependency>
-                <groupId>org.springframework.data</groupId>
-                <artifactId>spring-data-commons</artifactId>
-                <version>4.0.5</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-data-mongodb</artifactId>
-                <version>${spring-boot.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter</artifactId>
-                <version>${spring-boot.version}</version>
-            </dependency>
-            <!-- Spring Boot 4.x BOM — manages remaining transitive Spring versions -->
+            <!-- Spring Boot 4.x BOM — manages all Spring versions -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- Override parent's spring-data-commons 3.2.5 with SB4-compatible version -->
+            <dependency>
+                <groupId>org.springframework.data</groupId>
+                <artifactId>spring-data-commons</artifactId>
+                <version>4.0.6</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

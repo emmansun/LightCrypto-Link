@@ -1,7 +1,5 @@
 package io.github.emmansun.lightcrypto.adapter.mongodb;
 
-import io.github.emmansun.lightcrypto.adapter.mongodb.health.HealthAutoConfiguration;
-import io.github.emmansun.lightcrypto.adapter.mongodb.health.LclHealthIndicator;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,12 +21,6 @@ class V4AdapterClassLoadingTest {
     @Test
     void autoConfigurationClassExists() {
         assertThat(MongoAdapterV4AutoConfiguration.class).isNotNull();
-    }
-
-    @Test
-    void healthClassesExist() {
-        assertThat(LclHealthIndicator.class).isNotNull();
-        assertThat(HealthAutoConfiguration.class).isNotNull();
     }
 
     @Test
@@ -56,11 +48,12 @@ class V4AdapterClassLoadingTest {
     }
 
     @Test
-    void healthIndicatorUsesCorrectHealthPackage() {
-        // Verify LclHealthIndicator implements SB4 HealthIndicator
-        Class<?>[] interfaces = LclHealthIndicator.class.getInterfaces();
-        assertThat(interfaces).hasSize(1);
-        assertThat(interfaces[0].getName())
-                .isEqualTo("org.springframework.boot.health.contributor.HealthIndicator");
+    void sharedClassesAvailableFromCore() {
+        // Verify shared classes are available from lcl-adapter-mongodb-core
+        assertThat(MongoVaultStore.class).isNotNull();
+        assertThat(MongoStorageAdapter.class).isNotNull();
+        assertThat(MongoQueryTransformer.class).isNotNull();
+        assertThat(CryptoBeforeSaveListener.class).isNotNull();
+        assertThat(MongoCryptoEventListener.class).isNotNull();
     }
 }

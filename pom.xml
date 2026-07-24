@@ -40,6 +40,7 @@
         <module>lcl-spi</module>
         <module>lcl-core</module>
         <module>lcl-spring-boot-starter</module>
+        <module>lcl-adapter-mongodb-core</module>
         <module>lcl-adapter-mongodb</module>
         <module>lcl-adapter-mongodb-v4</module>
         <module>lcl-provider-azure-kms</module>
@@ -86,6 +87,11 @@
             <dependency>
                 <groupId>io.github.emmansun</groupId>
                 <artifactId>lcl-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.emmansun</groupId>
+                <artifactId>lcl-adapter-mongodb-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

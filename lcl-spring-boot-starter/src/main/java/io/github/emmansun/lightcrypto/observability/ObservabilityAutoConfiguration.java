@@ -7,7 +7,6 @@ import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -94,40 +93,59 @@ public class ObservabilityAutoConfiguration {
         }
     }
 
-    // ===== Health Indicator =====
+    // ===== Health Indicator (SB3) =====
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(HealthIndicator.class)
+    @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
     @ConditionalOnProperty(prefix = "lightcrypto.observability.health", name = "enabled", havingValue = "true", matchIfMissing = true)
-    static class HealthConfiguration {
+    static class HealthConfigurationSb3 {
 
         @Bean
         public LclHealthIndicator lclHealthIndicator(ApplicationContext context) {
-            Map<String, ComponentHealthCheck> checks = new LinkedHashMap<>();
-
-            // CoreHealthCheck: EventBus bean exists
-            checks.put("core", () -> {
-                boolean hasEventBus = context.getBeanNamesForType(EventBus.class).length > 0;
-                return hasEventBus ? LclHealthStatus.READY : LclHealthStatus.FAILED;
-            });
-
-            // KmsHealthCheck: at least one CmkProvider bean
-            checks.put("kms", () -> {
-                boolean hasCmkProvider = context.getBeanNamesForType(CmkProvider.class).length > 0;
-                return hasCmkProvider ? LclHealthStatus.READY : LclHealthStatus.FAILED;
-            });
-
-            // VaultHealthCheck: KeyVaultService is initialized
-            checks.put("vault", () -> {
-                try {
-                    context.getBean(KeyVaultService.class);
-                    return LclHealthStatus.READY;
-                } catch (Exception e) {
-                    return LclHealthStatus.DEGRADED;
-                }
-            });
-
-            return new LclHealthIndicator(checks);
+            return new LclHealthIndicator(buildChecks(context));
         }
+    }
+
+    // ===== Health Indicator (SB4) =====
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.boot.health.contributor.HealthIndicator")
+    @ConditionalOnProperty(prefix = "lightcrypto.observability.health", name = "enabled", havingValue = "true", matchIfMissing = true)
+    static class HealthConfigurationSb4 {
+
+        @Bean
+        public LclHealthIndicatorV4 lclHealthIndicatorV4(ApplicationContext context) {
+            return new LclHealthIndicatorV4(buildChecks(context));
+        }
+    }
+
+    // ===== Shared health check builder =====
+
+    private static Map<String, ComponentHealthCheck> buildChecks(ApplicationContext context) {
+        Map<String, ComponentHealthCheck> checks = new LinkedHashMap<>();
+
+        // CoreHealthCheck: EventBus bean exists
+        checks.put("core", () -> {
+            boolean hasEventBus = context.getBeanNamesForType(EventBus.class).length > 0;
+            return hasEventBus ? LclHealthStatus.READY : LclHealthStatus.FAILED;
+        });
+
+        // KmsHealthCheck: at least one CmkProvider bean
+        checks.put("kms", () -> {
+            boolean hasCmkProvider = context.getBeanNamesForType(CmkProvider.class).length > 0;
+            return hasCmkProvider ? LclHealthStatus.READY : LclHealthStatus.FAILED;
+        });
+
+        // VaultHealthCheck: KeyVaultService is initialized
+        checks.put("vault", () -> {
+            try {
+                context.getBean(KeyVaultService.class);
+                return LclHealthStatus.READY;
+            } catch (Exception e) {
+                return LclHealthStatus.DEGRADED;
+            }
+        });
+
+        return checks;
     }
 }

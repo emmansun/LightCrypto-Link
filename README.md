@@ -88,31 +88,19 @@ Add the starter dependency:
 
 #### Spring Boot 4.x notes
 
-The `-v4` adapter transitively pulls in the SB3 adapter JAR (for shared classes). To avoid conflicts, add the following to your SB4 application:
+The `-v4` adapter depends on `lcl-adapter-mongodb-core` (shared classes compiled against SB3 baseline, binary compatible with SB4). No special exclusion configuration is needed.
 
 ```properties
 # application.properties (SB4)
-spring.autoconfigure.exclude=io.github.emmansun.lightcrypto.adapter.mongodb.MongoAdapterAutoConfiguration
-spring.main.allow-bean-definition-overriding=true
 # SB4 renamed the MongoDB URI property (was spring.data.mongodb.uri)
 spring.mongodb.uri=${MONGODB_URI:mongodb://localhost:27017/mydb}
 ```
 
-If your parent POM manages Spring Boot 3.x versions, override in your module's `<dependencyManagement>`:
+If your parent POM manages Spring Boot 3.x versions, import the SB4 BOM in your module's `<dependencyManagement>`:
 
 ```xml
 <dependencyManagement>
   <dependencies>
-    <dependency>
-      <groupId>org.springframework.data</groupId>
-      <artifactId>spring-data-commons</artifactId>
-      <version>4.0.5</version>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-mongodb</artifactId>
-      <version>4.0.7</version>
-    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-dependencies</artifactId>
@@ -325,8 +313,9 @@ mvn clean verify
 LightCrypto-Link/
 |- lcl-spi/                              # SPI contracts (CmkProvider, WrappedKey, VaultStore, StorageAdapter, QueryTransformer)
 |- lcl-core/                             # Pure crypto core (Wire Format V1, CryptoCodec, BlindIndexEngine, KCV)
-|- lcl-adapter-mongodb/                  # MongoDB storage adapter — Spring Boot 3.x
-|- lcl-adapter-mongodb-v4/               # MongoDB storage adapter — Spring Boot 4.x (ValueExpressionDelegate)
+|- lcl-adapter-mongodb-core/             # Shared MongoDB adapter classes (version-independent)
+|- lcl-adapter-mongodb/                  # MongoDB storage adapter — Spring Boot 3.x (query layer)
+|- lcl-adapter-mongodb-v4/               # MongoDB storage adapter — Spring Boot 4.x (query layer)
 |- lcl-spring-boot-starter/              # Core starter (annotation-driven encryption)
 |- lcl-provider-azure-kms/               # Azure Key Vault CMK provider
 |- lcl-provider-alibaba-kms/             # Alibaba Cloud KMS CMK provider

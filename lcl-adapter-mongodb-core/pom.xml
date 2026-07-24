@@ -10,20 +10,28 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>lcl-adapter-mongodb</artifactId>
+    <artifactId>lcl-adapter-mongodb-core</artifactId>
     <packaging>jar</packaging>
 
-    <name>LCL :: Adapter :: MongoDB</name>
-    <description>MongoDB storage adapter for Light Crypto Link — VaultStore, StorageAdapter, QueryTransformer, and transparent encryption infrastructure.</description>
+    <name>LCL :: Adapter :: MongoDB Core</name>
+    <description>Version-independent shared MongoDB adapter classes for Light Crypto Link — VaultStore, StorageAdapter, QueryTransformer, listeners, and handlers.</description>
 
     <dependencies>
-        <!-- Shared MongoDB adapter classes (VaultStore, handlers, listeners, etc.) -->
         <dependency>
             <groupId>io.github.emmansun</groupId>
-            <artifactId>lcl-adapter-mongodb-core</artifactId>
+            <artifactId>lcl-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.emmansun</groupId>
+            <artifactId>lcl-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.emmansun</groupId>
+            <artifactId>lcl-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
-        <!-- Spring Boot MongoDB -->
+        <!-- Spring Boot MongoDB (SB3 baseline — binary compatible with SB4) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
@@ -42,19 +50,6 @@
             <artifactId>lombok</artifactId>
             <version>1.18.46</version>
             <scope>provided</scope>
-        </dependency>
-
-        <!-- Test dependencies -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>de.flapdoodle.embed</groupId>
-            <artifactId>de.flapdoodle.embed.mongo.spring3x</artifactId>
-            <version>4.33.0</version>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 

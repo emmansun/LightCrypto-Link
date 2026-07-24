@@ -19,64 +19,36 @@
     <properties>
         <!-- Override Spring Boot version for SB4 compatibility -->
         <spring-boot.version>4.0.7</spring-boot.version>
-        <spring-data-commons.version>4.0.5</spring-data-commons.version>
+        <spring-data-commons.version>4.0.6</spring-data-commons.version>
     </properties>
 
     <dependencies>
-        <!-- SB3 adapter — provides 13 unchanged classes (VaultStore, Listener, handlers, etc.) -->
+        <!-- Shared MongoDB adapter classes (version-independent, compiled against SB3 baseline) -->
         <dependency>
             <groupId>io.github.emmansun</groupId>
-            <artifactId>lcl-adapter-mongodb</artifactId>
-            <exclusions>
-                <!-- Exclude ALL SB3 Spring Boot / Spring Data / Spring Framework
-                     to avoid version conflicts with SB4 equivalents -->
-                <exclusion>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.springframework.data</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.springframework</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
+            <artifactId>lcl-adapter-mongodb-core</artifactId>
         </dependency>
 
         <!-- Spring Boot 4.x MongoDB starter (brings spring-data-mongodb 5.x) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
-        </dependency>
-
-        <!-- Explicit spring-data-commons 4.x to override SB3 adapter's transitive 3.x -->
-        <dependency>
-            <groupId>org.springframework.data</groupId>
-            <artifactId>spring-data-commons</artifactId>
-            <version>${spring-data-commons.version}</version>
+            <version>${spring-boot.version}</version>
         </dependency>
 
         <!-- Spring Boot 4.x auto-configuration -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- Spring Boot 4.x health (split from actuator in SB4) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-health</artifactId>
             <version>${spring-boot.version}</version>
-            <optional>true</optional>
+            <scope>provided</scope>
         </dependency>
 
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <version>${spring-boot.version}</version>
             <scope>test</scope>
         </dependency>
 

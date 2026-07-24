@@ -1,2 +1,1 @@
 io.github.emmansun.lightcrypto.adapter.mongodb.MongoAdapterV4AutoConfiguration
-io.github.emmansun.lightcrypto.adapter.mongodb.health.HealthAutoConfiguration

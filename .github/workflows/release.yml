@@ -63,6 +63,7 @@ jobs:
             lcl-spi/target/*.jar
             lcl-core/target/*.jar
             lcl-spring-boot-starter/target/*.jar
+            lcl-adapter-mongodb-core/target/*.jar
             lcl-adapter-mongodb/target/*.jar
             lcl-adapter-mongodb-v4/target/*.jar
             lcl-provider-azure-kms/target/*.jar
@@ -103,7 +104,7 @@ jobs:
         run: mvn -B -N install -DskipTests
 
       - name: Deploy to Maven Central
-        run: mvn -B clean deploy -DskipTests -Pcentral -pl .,lcl-spi,lcl-core,lcl-spring-boot-starter,lcl-adapter-mongodb,lcl-adapter-mongodb-v4,lcl-provider-azure-kms,lcl-provider-alibaba-kms
+        run: mvn -B clean deploy -DskipTests -Pcentral -pl .,lcl-spi,lcl-core,lcl-spring-boot-starter,lcl-adapter-mongodb-core,lcl-adapter-mongodb,lcl-adapter-mongodb-v4,lcl-provider-azure-kms,lcl-provider-alibaba-kms
         env:
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}

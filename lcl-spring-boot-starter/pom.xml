@@ -63,6 +63,14 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Spring Boot 4.x Health (split from actuator in SB4) — optional -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-health</artifactId>
+            <version>4.0.7</version>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
