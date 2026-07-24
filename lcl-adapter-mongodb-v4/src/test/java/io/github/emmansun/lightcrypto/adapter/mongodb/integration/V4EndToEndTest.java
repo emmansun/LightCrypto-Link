@@ -72,6 +72,8 @@ class V4EndToEndTest {
     @BeforeEach
     void cleanCollections() {
         mongoTemplate.dropCollection(IntTestUser.class);
+        // Clean vault collection to ensure test isolation (shared MongoDB with SB3 adapter tests)
+        mongoTemplate.getDb().getCollection("__lcl_keyvault").drop();
     }
 
     // ===== Encrypted CRUD =====

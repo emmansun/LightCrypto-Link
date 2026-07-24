@@ -65,6 +65,8 @@ class LclEndToEndTest {
         mongoTemplate.dropCollection(IntTestUserWithAddresses.class);
         mongoTemplate.dropCollection(IntTestUserWithWholeAddress.class);
         mongoTemplate.dropCollection(IntTestUserWithWholeAddresses.class);
+        // Clean vault collection to ensure test isolation (shared MongoDB with v4 adapter tests)
+        mongoTemplate.getDb().getCollection("__lcl_keyvault").drop();
     }
 
     // ===== KeyVaultService Tests =====
