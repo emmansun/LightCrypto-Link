@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://apache.org"
+         xmlns:xsi="http://w3.org"
+         xsi:schemaLocation="http://apache.org http://apache.org">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.emmansun</groupId>
+        <artifactId>lcl-examples</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>lcl-example-basic-crud-v4</artifactId>
+    <packaging>jar</packaging>
+
+    <name>LCL :: Examples :: Basic CRUD (Spring Boot 4)</name>
+    <description>Minimal demo: encrypted CRUD + blind index query on Spring Boot 4.x.</description>
+
+    <properties>
+        <!-- Spring Boot 4.x -->
+        <spring-boot.version>4.0.7</spring-boot.version>
+    </properties>
+
+    <dependencies>
+        <!-- LCL Starter (core encryption engine) -->
+        <dependency>
+            <groupId>io.github.emmansun</groupId>
+            <artifactId>lcl-spring-boot-starter</artifactId>
+        </dependency>
+        <!-- LCL MongoDB Adapter — Spring Boot 4.x variant -->
+        <dependency>
+            <groupId>io.github.emmansun</groupId>
+            <artifactId>lcl-adapter-mongodb-v4</artifactId>
+        </dependency>
+
+        <!-- Spring Boot 4.x -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.46</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.46</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- Skip deploy for example modules -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.4</version>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

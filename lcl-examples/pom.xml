@@ -17,6 +17,7 @@
 
     <modules>
         <module>basic-crud</module>
+        <module>basic-crud-v4</module>
         <module>alibaba-kms</module>
         <module>azure-keyvault</module>
         <module>observability</module>
