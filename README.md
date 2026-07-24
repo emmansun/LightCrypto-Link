@@ -86,6 +86,44 @@ Add the starter dependency:
 
 > **Adapter selection**: Use `lcl-adapter-mongodb` for Spring Boot 3.x, or `lcl-adapter-mongodb-v4` for Spring Boot 4.x. Do **not** include both — only one adapter should be on the classpath.
 
+#### Spring Boot 4.x notes
+
+The `-v4` adapter transitively pulls in the SB3 adapter JAR (for shared classes). To avoid conflicts, add the following to your SB4 application:
+
+```properties
+# application.properties (SB4)
+spring.autoconfigure.exclude=io.github.emmansun.lightcrypto.adapter.mongodb.MongoAdapterAutoConfiguration
+spring.main.allow-bean-definition-overriding=true
+# SB4 renamed the MongoDB URI property (was spring.data.mongodb.uri)
+spring.mongodb.uri=${MONGODB_URI:mongodb://localhost:27017/mydb}
+```
+
+If your parent POM manages Spring Boot 3.x versions, override in your module's `<dependencyManagement>`:
+
+```xml
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.data</groupId>
+      <artifactId>spring-data-commons</artifactId>
+      <version>4.0.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-mongodb</artifactId>
+      <version>4.0.7</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-dependencies</artifactId>
+      <version>4.0.7</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+```
+
 Cloud KMS modules:
 
 ```xml
@@ -252,7 +290,14 @@ lightcrypto:
 See [lcl-examples](lcl-examples/) for runnable demos:
 
 ```bash
+# Spring Boot 3.x
 cd lcl-examples/basic-crud
+mvn spring-boot:run
+
+# Spring Boot 4.x (requires MongoDB — inject URI via env)
+cd lcl-examples/basic-crud-v4
+set MONGODB_URI=mongodb://user:pass@host:27017/db?authSource=admin   # Windows
+export MONGODB_URI=mongodb://user:pass@host:27017/db?authSource=admin # Linux/macOS
 mvn spring-boot:run
 
 cd lcl-examples/azure-keyvault
@@ -286,7 +331,8 @@ LightCrypto-Link/
 |- lcl-provider-azure-kms/               # Azure Key Vault CMK provider
 |- lcl-provider-alibaba-kms/             # Alibaba Cloud KMS CMK provider
 |- lcl-examples/                         # Example applications
-|  |- basic-crud/
+|  |- basic-crud/                        #   Spring Boot 3.x
+|  |- basic-crud-v4/                     #   Spring Boot 4.x
 |  |- azure-keyvault/
 |  |- alibaba-kms/
 |  `- observability/

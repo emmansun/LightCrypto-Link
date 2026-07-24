@@ -21,13 +21,38 @@
         <spring-boot.version>4.0.7</spring-boot.version>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Direct declarations OVERRIDE parent POM's managed versions (3.2.5) -->
+            <dependency>
+                <groupId>org.springframework.data</groupId>
+                <artifactId>spring-data-commons</artifactId>
+                <version>4.0.5</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-data-mongodb</artifactId>
+                <version>${spring-boot.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter</artifactId>
+                <version>${spring-boot.version}</version>
+            </dependency>
+            <!-- Spring Boot 4.x BOM — manages remaining transitive Spring versions -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
-        <!-- LCL Starter (core encryption engine) -->
-        <dependency>
-            <groupId>io.github.emmansun</groupId>
-            <artifactId>lcl-spring-boot-starter</artifactId>
-        </dependency>
-        <!-- LCL MongoDB Adapter — Spring Boot 4.x variant -->
+        <!-- LCL MongoDB Adapter — Spring Boot 4.x variant
+             (transitively brings lcl-spring-boot-starter, lcl-core, lcl-spi) -->
         <dependency>
             <groupId>io.github.emmansun</groupId>
             <artifactId>lcl-adapter-mongodb-v4</artifactId>

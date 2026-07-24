@@ -27,12 +27,35 @@
         <dependency>
             <groupId>io.github.emmansun</groupId>
             <artifactId>lcl-adapter-mongodb</artifactId>
+            <exclusions>
+                <!-- Exclude ALL SB3 Spring Boot / Spring Data / Spring Framework
+                     to avoid version conflicts with SB4 equivalents -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework.data</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Spring Boot 4.x MongoDB starter (brings spring-data-mongodb 5.x) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+
+        <!-- Explicit spring-data-commons 4.x to override SB3 adapter's transitive 3.x -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-commons</artifactId>
+            <version>${spring-data-commons.version}</version>
         </dependency>
 
         <!-- Spring Boot 4.x auto-configuration -->
