@@ -60,7 +60,7 @@
         <bouncycastle.version>1.85</bouncycastle.version>
         <azure.keyvault.keys.version>4.11.1</azure.keyvault.keys.version>
         <azure.identity.version>1.18.4</azure.identity.version>
-        <aliyun.kms.version>2.0.0</aliyun.kms.version>
+        <aliyun.kms.version>2.1.0</aliyun.kms.version>
 
         <!-- Plugin versions -->
         <checkstyle.version>10.17.0</checkstyle.version>
