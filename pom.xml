@@ -250,6 +250,13 @@
     </build>
 
     <profiles>
+        <!-- Benchmark profile: mvn verify -Pbench -pl lcl-benchmarks -->
+        <profile>
+            <id>bench</id>
+            <modules>
+                <module>lcl-benchmarks</module>
+            </modules>
+        </profile>
         <!-- SB4 compile verification profile: mvn compile -Psb4 -->
         <profile>
             <id>sb4</id>

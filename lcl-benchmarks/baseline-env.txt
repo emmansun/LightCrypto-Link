@@ -1,0 +1,9 @@
+# Baseline Environment
+# Captured: 2026-07-24
+# OS: Windows 11 24H2
+# CPU: 13th Gen Intel Core i7-13700 (16C/24T, 2.1 GHz base / 5.2 GHz boost)
+# JDK: Amazon Corretto 17.0.16 (OpenJDK 64-Bit Server VM)
+# JMH: 1.37
+# Forks: 2, Warmup: 3x1s, Measurement: 5x2s
+# Note: CI (GitHub Actions ubuntu-latest) hardware differs; regression detection
+#       is relative to this baseline with a 10% threshold to absorb variance.
