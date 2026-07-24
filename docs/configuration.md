@@ -201,6 +201,31 @@ Notes:
 - If `tenant-id/client-id/client-secret` are all present, service principal auth is used.
 - If none are set, `DefaultAzureCredential` is used.
 
+### Custom KeyClient Bean
+
+If your application requires full control over the Azure Key Vault client (custom HTTP pipeline, proxy, retry policy, or credential chain), define your own `KeyClient` bean. LCL will detect it and skip internal client construction:
+
+```java
+@Configuration
+public class MyAzureKmsConfig {
+
+    @Bean
+    public KeyClient keyClient() {
+        return new KeyClientBuilder()
+                .vaultUrl("https://myvault.vault.azure.net")
+                .credential(new DefaultAzureCredentialBuilder()
+                        .additionallyAllowedTenants("*")
+                        .build())
+                .retryOptions(new RetryOptions(new ExponentialBackoffOptions()
+                        .setMaxRetries(5)
+                        .setBaseDelay(Duration.ofSeconds(2))))
+                .buildClient();
+    }
+}
+```
+
+When a custom `KeyClient` bean is present, only `lcl.crypto.azure.key-name` is required. The `vault-uri`, `tenant-id`, `client-id`, and `client-secret` properties are all ignored since the client is already fully configured.
+
 ## Alibaba Cloud KMS
 
 The Alibaba provider module uses its own configuration prefix (`lcl.crypto.alibaba`):
@@ -218,6 +243,31 @@ lcl:
       # key-version-id: optional
       # public-key: optional PEM
 ```
+
+### Custom KMS Client Bean
+
+If your application requires full control over the Alibaba Cloud KMS client (custom endpoint, proxy, timeout, or connection settings), define your own `com.aliyun.kms20160120.Client` bean. LCL will detect it and skip internal client construction:
+
+```java
+@Configuration
+public class MyAlibabaKmsConfig {
+
+    @Bean
+    public com.aliyun.kms20160120.Client alibabaKmsClient() throws Exception {
+        com.aliyun.teaopenapi.models.Config config =
+                new com.aliyun.teaopenapi.models.Config()
+                        .setAccessKeyId(System.getenv("ALIBABA_AK_ID"))
+                        .setAccessKeySecret(System.getenv("ALIBABA_AK_SECRET"))
+                        .setEndpoint("kms-vpc.cn-shenzhen.aliyuncs.com")
+                        .setReadTimeout(30000)
+                        .setConnectTimeout(10000)
+                        .setHttpProxy("http://proxy:8080");
+        return new com.aliyun.kms20160120.Client(config);
+    }
+}
+```
+
+When a custom `Client` bean is present, `lcl.crypto.alibaba.key-id` is still required (used to resolve key versions and public keys), but `access-key-id/access-key-secret/region-id/endpoint` are ignored.
 
 ## Validation
 

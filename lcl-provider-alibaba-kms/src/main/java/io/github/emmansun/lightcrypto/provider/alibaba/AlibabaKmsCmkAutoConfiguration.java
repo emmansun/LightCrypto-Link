@@ -31,13 +31,24 @@ import java.security.PublicKey;
 @EnableConfigurationProperties(AlibabaKmsCmkProperties.class)
 public class AlibabaKmsCmkAutoConfiguration {
 
+    /**
+     * Auto-configures the Alibaba Cloud KMS client from properties.
+     * <p>
+     * Skipped when the application provides its own {@code com.aliyun.kms20160120.Client} bean,
+     * allowing full control over network, timeout, proxy, and retry settings.
+     * </p>
+     */
+    @Bean
+    @ConditionalOnMissingBean(com.aliyun.kms20160120.Client.class)
+    public com.aliyun.kms20160120.Client alibabaKmsClient(AlibabaKmsCmkProperties properties) {
+        validateCredentials(properties);
+        return buildKmsClient(properties);
+    }
+
     @Bean
     @ConditionalOnMissingBean(CmkProvider.class)
-    public CmkProvider cmkProvider(AlibabaKmsCmkProperties properties) {
-        validateProperties(properties);
-
-        com.aliyun.kms20160120.Client kmsClient = buildKmsClient(properties);
-
+    public CmkProvider cmkProvider(AlibabaKmsCmkProperties properties,
+                                   com.aliyun.kms20160120.Client kmsClient) {
         if (properties.getMode() == AlibabaKmsCmkProperties.Mode.SYMMETRIC) {
             log.info("Alibaba KMS CMK provider initialized in SYMMETRIC mode: keyId={}", properties.getKeyId());
             return createSymmetricProvider(properties, kmsClient);
@@ -47,7 +58,7 @@ public class AlibabaKmsCmkAutoConfiguration {
         }
     }
 
-    private void validateProperties(AlibabaKmsCmkProperties properties) {
+    private void validateCredentials(AlibabaKmsCmkProperties properties) {
         if (properties.getAccessKeyId() == null || properties.getAccessKeyId().isBlank()) {
             throw new IllegalArgumentException(
                     "lcl.crypto.alibaba.access-key-id must not be null or blank");

@@ -21,19 +21,22 @@ import java.time.Duration;
 /**
  * Auto-configuration for Azure Key Vault CMK provider.
  * <p>
- * Activated when {@code lcl.crypto.azure.vault-uri} is set. Creates an
+ * Activated when {@code lcl.crypto.azure.key-name} is set. Creates an
  * {@link AzureKeyVaultCmkProvider} bean that takes precedence over the default
  * {@code LocalSymmetricCmkProvider} via {@code @ConditionalOnMissingBean}.
  * </p>
  * <p>
- * Startup flow: build credential -&gt; build CryptographyClient -&gt; call {@code getKey()}
- * to resolve key version and (optionally) public key.
+ * Two client modes:
+ * <ul>
+ *   <li>Default: builds {@link KeyClient} from {@code vault-uri} + credentials</li>
+ *   <li>Custom: application provides its own {@code KeyClient} bean (skips internal construction)</li>
+ * </ul>
  * </p>
  */
 @Slf4j
 @AutoConfiguration
 @ConditionalOnClass(AzureKeyVaultCmkProvider.class)
-@ConditionalOnProperty(prefix = "lcl.crypto.azure", name = "vault-uri")
+@ConditionalOnProperty(prefix = "lcl.crypto.azure", name = "key-name")
 @EnableConfigurationProperties(AzureKeyVaultCmkProperties.class)
 public class AzureKeyVaultCmkAutoConfiguration {
 
@@ -43,33 +46,41 @@ public class AzureKeyVaultCmkAutoConfiguration {
 
     private static final long TOKEN_MAX_RETRY_TIMEOUT = 10L;
 
+    /**
+     * Auto-configures the Azure Key Vault {@link KeyClient} from properties.
+     * <p>
+     * Skipped when the application provides its own {@code KeyClient} bean,
+     * allowing full control over HTTP pipeline, proxy, retry policy, and credential chain.
+     * </p>
+     */
+    @Bean
+    @ConditionalOnMissingBean(KeyClient.class)
+    public KeyClient azureKeyClient(AzureKeyVaultCmkProperties properties) {
+        if (properties.getVaultUri() == null || properties.getVaultUri().isBlank()) {
+            throw new IllegalArgumentException(
+                    "lcl.crypto.azure.vault-uri must not be null or blank when no custom KeyClient bean is provided");
+        }
+        validateCredentials(properties);
+        TokenCredential credential = buildTokenCredential(properties);
+        return buildKeyClient(properties, credential);
+    }
+
     @Bean
     @ConditionalOnMissingBean(CmkProvider.class)
-    public CmkProvider cmkProvider(AzureKeyVaultCmkProperties properties) {
-        validateProperties(properties);
-
-        TokenCredential credential = buildTokenCredential(properties);
-        KeyClient keyClient = buildKeyClient(properties, credential);
+    public CmkProvider cmkProvider(AzureKeyVaultCmkProperties properties, KeyClient keyClient) {
+        if (properties.getKeyName() == null || properties.getKeyName().isBlank()) {
+            throw new IllegalArgumentException("lcl.crypto.azure.key-name must not be null or blank");
+        }
 
         KeyVaultKey key = keyClient.getKey(properties.getKeyName());
         String keyVersion = key.getProperties().getVersion();
 
         PublicKey publicKey = resolvePublicKey(properties, key);
 
-        log.info("Azure Key Vault CMK provider initialized: vaultUri={}, keyName={}, keyVersion={}, algorithm={}",
-                properties.getVaultUri(), properties.getKeyName(), keyVersion, properties.getAlgorithm());
+        log.info("Azure Key Vault CMK provider initialized: keyName={}, keyVersion={}, algorithm={}",
+                properties.getKeyName(), keyVersion, properties.getAlgorithm());
 
         return new AzureKeyVaultCmkProvider(publicKey, keyClient, ALGORITHM_RSA, properties.getKeyName(), keyVersion);
-    }
-
-    private void validateProperties(AzureKeyVaultCmkProperties properties) {
-        if (properties.getVaultUri() == null || properties.getVaultUri().isBlank()) {
-            throw new IllegalArgumentException("lcl.crypto.azure.vault-uri must not be null or blank");
-        }
-        if (properties.getKeyName() == null || properties.getKeyName().isBlank()) {
-            throw new IllegalArgumentException("lcl.crypto.azure.key-name must not be null or blank");
-        }
-        validateCredentials(properties);
     }
 
     private void validateCredentials(AzureKeyVaultCmkProperties properties) {

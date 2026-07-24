@@ -16,23 +16,23 @@ class AzureKeyVaultCmkAutoConfigurationTest {
     private final AzureKeyVaultCmkAutoConfiguration autoConfiguration = new AzureKeyVaultCmkAutoConfiguration();
 
     @Test
-    void validateProperties_shouldRejectBlankVaultUri() throws Exception {
+    void azureKeyClient_shouldRejectBlankVaultUri() {
         AzureKeyVaultCmkProperties properties = validProperties();
         properties.setVaultUri(" ");
 
-        assertThatThrownBy(() -> invokePrivate("validateProperties", new Class[]{AzureKeyVaultCmkProperties.class}, properties))
-                .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                .hasRootCauseMessage("lcl.crypto.azure.vault-uri must not be null or blank");
+        assertThatThrownBy(() -> autoConfiguration.azureKeyClient(properties))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("vault-uri must not be null or blank");
     }
 
     @Test
-    void validateProperties_shouldRejectBlankKeyName() throws Exception {
+    void cmkProvider_shouldRejectBlankKeyName() {
         AzureKeyVaultCmkProperties properties = validProperties();
         properties.setKeyName(" ");
 
-        assertThatThrownBy(() -> invokePrivate("validateProperties", new Class[]{AzureKeyVaultCmkProperties.class}, properties))
-                .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                .hasRootCauseMessage("lcl.crypto.azure.key-name must not be null or blank");
+        assertThatThrownBy(() -> autoConfiguration.cmkProvider(properties, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("lcl.crypto.azure.key-name must not be null or blank");
     }
 
     @Test

@@ -21,7 +21,8 @@ class AlibabaKmsCmkAutoConfigurationTest {
         properties.setKeyVersionId("v-test");
         properties.setPublicKey(generateRsaPem());
 
-        CmkProvider cmkProvider = autoConfiguration.cmkProvider(properties);
+        com.aliyun.kms20160120.Client kmsClient = buildKmsClient(properties);
+        CmkProvider cmkProvider = autoConfiguration.cmkProvider(properties, kmsClient);
 
         assertThat(cmkProvider).isInstanceOf(AlibabaKmsCmkProvider.class);
         assertThat(cmkProvider.getProviderId()).isEqualTo("alibaba-kms");
@@ -29,21 +30,21 @@ class AlibabaKmsCmkAutoConfigurationTest {
     }
 
     @Test
-    void validateProperties_shouldRejectBlankAccessKeyId() throws Exception {
+    void validateCredentials_shouldRejectBlankAccessKeyId() throws Exception {
         AlibabaKmsCmkProperties properties = validProperties();
         properties.setAccessKeyId(" ");
 
-        assertThatThrownBy(() -> invokePrivate("validateProperties", new Class[]{AlibabaKmsCmkProperties.class}, properties))
+        assertThatThrownBy(() -> invokePrivate("validateCredentials", new Class[]{AlibabaKmsCmkProperties.class}, properties))
                 .hasRootCauseInstanceOf(IllegalArgumentException.class)
                 .hasRootCauseMessage("lcl.crypto.alibaba.access-key-id must not be null or blank");
     }
 
     @Test
-    void validateProperties_shouldRejectBlankAccessKeySecret() throws Exception {
+    void validateCredentials_shouldRejectBlankAccessKeySecret() throws Exception {
         AlibabaKmsCmkProperties properties = validProperties();
         properties.setAccessKeySecret(" ");
 
-        assertThatThrownBy(() -> invokePrivate("validateProperties", new Class[]{AlibabaKmsCmkProperties.class}, properties))
+        assertThatThrownBy(() -> invokePrivate("validateCredentials", new Class[]{AlibabaKmsCmkProperties.class}, properties))
                 .hasRootCauseInstanceOf(IllegalArgumentException.class)
                 .hasRootCauseMessage("lcl.crypto.alibaba.access-key-secret must not be null or blank");
     }
