@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(classes = IntTestApplication.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @EnabledIf(value = "mongoAvailable", disabledReason = "MongoDB not available on localhost:27017")
 class V4EndToEndTest {
 
@@ -69,11 +70,15 @@ class V4EndToEndTest {
     @Autowired
     private EntityMetadataCache entityMetadataCache;
 
+    /** Clean vault once before all tests for isolation from SB3 adapter tests. */
+    @BeforeAll
+    void cleanVaultOnce() {
+        mongoTemplate.getDb().getCollection("__lcl_keyvault").drop();
+    }
+
     @BeforeEach
     void cleanCollections() {
         mongoTemplate.dropCollection(IntTestUser.class);
-        // Clean vault collection to ensure test isolation (shared MongoDB with SB3 adapter tests)
-        mongoTemplate.getDb().getCollection("__lcl_keyvault").drop();
     }
 
     // ===== Encrypted CRUD =====

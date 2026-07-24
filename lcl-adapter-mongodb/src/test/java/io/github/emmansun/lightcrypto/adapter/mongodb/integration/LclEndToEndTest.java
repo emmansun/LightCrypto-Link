@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.*;
 @ContextConfiguration(initializers = MongoCiInitializer.class)
 @DirtiesContext
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class LclEndToEndTest {
 
     @Autowired
@@ -56,6 +57,17 @@ class LclEndToEndTest {
     @Autowired
     private IntTestWholeSimpleCollectionsRepository wholeSimpleCollectionsRepository;
 
+    /**
+     * Clean vault collection once before all tests to ensure isolation from
+     * other test classes sharing the same MongoDB (e.g. v4 adapter tests).
+     * Cannot be in @BeforeEach because KeyVaultService caches vault state
+     * in memory — dropping the collection per-test would desync the cache.
+     */
+    @BeforeAll
+    void cleanVaultOnce() {
+        mongoTemplate.getDb().getCollection("__lcl_keyvault").drop();
+    }
+
     @BeforeEach
     void cleanCollections() {
         mongoTemplate.dropCollection(IntTestUser.class);
@@ -65,8 +77,6 @@ class LclEndToEndTest {
         mongoTemplate.dropCollection(IntTestUserWithAddresses.class);
         mongoTemplate.dropCollection(IntTestUserWithWholeAddress.class);
         mongoTemplate.dropCollection(IntTestUserWithWholeAddresses.class);
-        // Clean vault collection to ensure test isolation (shared MongoDB with v4 adapter tests)
-        mongoTemplate.getDb().getCollection("__lcl_keyvault").drop();
     }
 
     // ===== KeyVaultService Tests =====
