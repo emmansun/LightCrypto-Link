@@ -4,6 +4,35 @@ All notable changes to LightCrypto-Link are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Spring Boot 4.x compatible MongoDB adapter and a minimal `basic-crud-v4` example.
+- New shared module `lcl-adapter-mongodb-core` to extract MongoDB adapter common logic.
+- JMH benchmark module `lcl-benchmarks` with baseline comparison tooling for performance tracking.
+- KMS extension point: support custom KMS client bean injection in provider integration.
+
+### Changed
+
+- Benchmark workflow now compares candidate vs reference results on the same GitHub runner to reduce environment-noise false positives.
+- Blind index query rewrite now remains queryable after DEK rotation by considering historical key material in query matching.
+
+### Fixed
+
+- Mongo blind index string normalization is unified between write and query paths.
+- Spring Boot 4 migration fixes across repository factory wiring, mapping converter compatibility, auto-configuration naming conflicts, and Spring Data API alignment.
+- Integration-test stability improvements: vault lifecycle isolation fixes, CI environment alignment, and logging dependency conflict cleanup.
+
+### Documentation
+
+- Clarified `LocalDateTime` millisecond precision behavior for cross-language (Node.js) compatibility.
+- Updated README artifact naming.
+
+### Dependencies
+
+- Dependency and workflow maintenance updates (CodeQL actions, OSSF scorecard-action, Micrometer, Gson, Spring Boot health, JUnit Jupiter, AssertJ, checkout action).
+
 ## [1.0.0] — 2026-07-21
 
 ### Added
