@@ -161,13 +161,13 @@ public class CryptoMongoQueryCreator {
     }
 
     private Object hashValue(EncryptedFieldMetadata meta, Object value) {
-        byte[] serialized = typeSerializer.serialize(value);
         String namespace = meta.namespace().canonical();
         keyVaultService.ensureVaultInitialized(namespace);
         byte[] hmacKey = keyVaultService.getActiveHmacKey(namespace);
         io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine engine =
                 new io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine(hmacKey);
-        return engine.computeBlindIndex(meta.namespace(), meta.blindIndexFieldName(), serialized);
+        return BlindIndexValueEncoder.computeBlindIndex(
+            engine, typeSerializer, meta.namespace(), meta.blindIndexFieldName(), value);
     }
 
     private EncryptedFieldMetadata findEncryptedField(String key, List<EncryptedFieldMetadata> fields) {

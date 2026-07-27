@@ -3,6 +3,7 @@ package io.github.emmansun.lightcrypto.adapter.mongodb;
 import io.github.emmansun.lightcrypto.config.CryptographyProperties;
 import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine;
+import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeSerializer;
@@ -79,11 +80,11 @@ class CryptoBeforeSaveListenerTest extends MongoAdapterTestBase {
     @Test
     void encryptedListAndMapValuesAreTransformedToSubDocuments() {
         TestArticle article = new TestArticle();
-        article.setTags(List.of("java", "spring"));
+        article.setTags(List.of("  Java  ", "spring"));
         article.setSettings(Map.of("theme", "dark"));
 
         Document doc = new Document();
-        doc.put("tags", List.of("java", "spring"));
+        doc.put("tags", List.of("  Java  ", "spring"));
         doc.put("settings", new Document("theme", "dark"));
 
         listener.onBeforeSave(new BeforeSaveEvent<>(article, doc, "col"));
@@ -95,6 +96,9 @@ class CryptoBeforeSaveListenerTest extends MongoAdapterTestBase {
         assertThat(tagSubDoc.get("c")).isInstanceOf(String.class);
         assertThat(tagSubDoc.get("b")).isInstanceOf(String.class);
         assertThat(tagSubDoc.getString("_t")).isEqualTo("STR");
+        String expectedBlindIndex = new BlindIndexEngine(TEST_HMAC_KEY)
+            .computeBlindIndex(Namespace.parse("default.default.TestArticle#tags"), "tags", "  Java  ");
+        assertThat(tagSubDoc.getString("b")).isEqualTo(expectedBlindIndex);
 
         Document settings = (Document) doc.get("settings");
         Document settingSubDoc = (Document) settings.get("theme");

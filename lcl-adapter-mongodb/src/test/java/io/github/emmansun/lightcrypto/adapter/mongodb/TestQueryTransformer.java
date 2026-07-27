@@ -3,8 +3,7 @@ package io.github.emmansun.lightcrypto.adapter.mongodb;
 import io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.spi.QueryTransformer;
-
-import java.nio.charset.StandardCharsets;
+import io.github.emmansun.lightcrypto.service.TypeSerializer;
 
 /**
  * Simple QueryTransformer for unit tests.
@@ -13,9 +12,11 @@ import java.nio.charset.StandardCharsets;
 public class TestQueryTransformer implements QueryTransformer {
 
     private final byte[] hmacKey;
+    private final TypeSerializer typeSerializer;
 
-    public TestQueryTransformer(byte[] hmacKey) {
+    public TestQueryTransformer(byte[] hmacKey, TypeSerializer typeSerializer) {
         this.hmacKey = hmacKey;
+        this.typeSerializer = typeSerializer;
     }
 
     @Override
@@ -28,22 +29,12 @@ public class TestQueryTransformer implements QueryTransformer {
         BlindIndexEngine engine = new BlindIndexEngine(hmacKey);
         Namespace ns = Namespace.parse(namespace);
         String fieldName = ns.field();
-        byte[] valueBytes = serializeValue(plaintextValue);
-        return engine.computeBlindIndex(ns, fieldName, valueBytes);
+        return BlindIndexValueEncoder.computeBlindIndex(
+                engine, typeSerializer, ns, fieldName, plaintextValue);
     }
 
     @Override
     public boolean supportsField(String field, Class<?> entityType) {
         return true;
-    }
-
-    private byte[] serializeValue(Object value) {
-        if (value instanceof byte[] bytes) {
-            return bytes;
-        }
-        if (value instanceof String str) {
-            return str.getBytes(StandardCharsets.UTF_8);
-        }
-        return String.valueOf(value).getBytes(StandardCharsets.UTF_8);
     }
 }

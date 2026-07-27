@@ -17,7 +17,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -31,7 +30,7 @@ class CryptoMongoQueryCreatorTest extends MongoAdapterTestBase {
         EntityMetadataCache mc = new EntityMetadataCache(new CryptographyProperties(), new TenantProperties());
         TypeSerializer ser = createTestTypeSerializer();
         KeyVaultService vs = new TestKeyVaultService(TEST_DEK, TEST_HMAC_KEY);
-        qc = new CryptoMongoQueryCreator(mc, ser, vs, new TestQueryTransformer(TEST_HMAC_KEY));
+        qc = new CryptoMongoQueryCreator(mc, ser, vs, new TestQueryTransformer(TEST_HMAC_KEY, ser));
         blindIndexEngine = new BlindIndexEngine(TEST_HMAC_KEY);
     }
 
@@ -41,7 +40,7 @@ class CryptoMongoQueryCreatorTest extends MongoAdapterTestBase {
         Query r = qc.rewrite(q, TestUser.class);
         Document doc = r.getQueryObject();
         Namespace ns = Namespace.parse("default.default.TestUser#phone");
-        String expected = blindIndexEngine.computeBlindIndex(ns, "phone", "13800138000".getBytes(StandardCharsets.UTF_8));
+        String expected = blindIndexEngine.computeBlindIndex(ns, "phone", "13800138000");
         assertThat(doc.getString("phone.b")).isEqualTo(expected);
         assertThat(doc.containsKey("phone")).isFalse();
         // Verify base64url output
@@ -105,11 +104,23 @@ class CryptoMongoQueryCreatorTest extends MongoAdapterTestBase {
         String expected = blindIndexEngine.computeBlindIndex(
                 ns,
                 "tags",
-                "java".getBytes(StandardCharsets.UTF_8)
+                "java"
         );
 
         assertThat(doc.getString("tags.b")).isEqualTo(expected);
         assertThat(doc.containsKey("tags")).isFalse();
+    }
+
+    @Test
+    void findByTagsNormalizesCaseAndWhitespace() {
+        Query q = new Query(Criteria.where("tags").is("  Java "));
+        Query r = qc.rewrite(q, TestArticle.class);
+        Document doc = r.getQueryObject();
+
+        Namespace ns = Namespace.parse("default.default.TestArticle#tags");
+        String expected = blindIndexEngine.computeBlindIndex(ns, "tags", "java");
+
+        assertThat(doc.getString("tags.b")).isEqualTo(expected);
     }
 
     @Test

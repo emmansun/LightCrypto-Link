@@ -78,8 +78,9 @@ public class MongoAdapterV4AutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(QueryTransformer.class)
     public MongoQueryTransformer mongoQueryTransformer(HmacKeyProvider hmacKeyProvider,
-                                                       BlindIndexFieldChecker fieldChecker) {
-        return new MongoQueryTransformer(hmacKeyProvider, fieldChecker);
+                                                       BlindIndexFieldChecker fieldChecker,
+                                                       TypeSerializer typeSerializer) {
+        return new MongoQueryTransformer(hmacKeyProvider, fieldChecker, typeSerializer);
     }
 
     // ===== SPI implementations =====

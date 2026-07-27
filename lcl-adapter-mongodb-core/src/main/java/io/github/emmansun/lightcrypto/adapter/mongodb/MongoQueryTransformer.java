@@ -5,8 +5,7 @@ import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.spi.BlindIndexFieldChecker;
 import io.github.emmansun.lightcrypto.spi.HmacKeyProvider;
 import io.github.emmansun.lightcrypto.spi.QueryTransformer;
-
-import java.nio.charset.StandardCharsets;
+import io.github.emmansun.lightcrypto.service.TypeSerializer;
 
 /**
  * MongoDB implementation of {@link QueryTransformer}.
@@ -28,10 +27,14 @@ public class MongoQueryTransformer implements QueryTransformer {
 
     private final HmacKeyProvider hmacKeyProvider;
     private final BlindIndexFieldChecker fieldChecker;
+    private final TypeSerializer typeSerializer;
 
-    public MongoQueryTransformer(HmacKeyProvider hmacKeyProvider, BlindIndexFieldChecker fieldChecker) {
+    public MongoQueryTransformer(HmacKeyProvider hmacKeyProvider,
+                                 BlindIndexFieldChecker fieldChecker,
+                                 TypeSerializer typeSerializer) {
         this.hmacKeyProvider = hmacKeyProvider;
         this.fieldChecker = fieldChecker;
+        this.typeSerializer = typeSerializer;
     }
 
     @Override
@@ -46,9 +49,8 @@ public class MongoQueryTransformer implements QueryTransformer {
 
         Namespace ns = Namespace.parse(namespace);
         String fieldName = extractFieldName(namespace);
-
-        byte[] valueBytes = serializeValue(plaintextValue);
-        return engine.computeBlindIndex(ns, fieldName, valueBytes);
+        return BlindIndexValueEncoder.computeBlindIndex(
+            engine, typeSerializer, ns, fieldName, plaintextValue);
     }
 
     @Override
@@ -66,19 +68,5 @@ public class MongoQueryTransformer implements QueryTransformer {
             return namespace.substring(hashIndex + 1);
         }
         return namespace;
-    }
-
-    /**
-     * Serializes a query value to bytes for blind index computation.
-     */
-    private byte[] serializeValue(Object value) {
-        if (value instanceof byte[] bytes) {
-            return bytes;
-        }
-        if (value instanceof String str) {
-            return str.trim().toLowerCase().getBytes(StandardCharsets.UTF_8);
-        }
-        // For other types, convert to string representation
-        return String.valueOf(value).getBytes(StandardCharsets.UTF_8);
     }
 }

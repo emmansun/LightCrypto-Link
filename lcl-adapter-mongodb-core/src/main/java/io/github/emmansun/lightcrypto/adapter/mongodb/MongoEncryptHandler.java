@@ -108,7 +108,7 @@ public class MongoEncryptHandler implements EncryptHandler {
                         Object rawBsonValue = bsonContext.get(segment);
                         if (rawBsonValue instanceof Document rawDoc) {
                             byte[] serialized = structuredValueCodec.encode(rawDoc, "DOC");
-                            bsonContext.put(segment, buildEncryptedPayload(meta, serialized, "DOC"));
+                            bsonContext.put(segment, buildEncryptedPayload(meta, rawDoc, serialized, "DOC"));
                         }
                         return;
                     }
@@ -141,7 +141,7 @@ public class MongoEncryptHandler implements EncryptHandler {
 
                 if (isLeaf && meta.wholeObject()) {
                     byte[] serialized = structuredValueCodec.encode(bsonList, "COL");
-                    bsonContext.put(segment, buildEncryptedPayload(meta, serialized, "COL"));
+                    bsonContext.put(segment, buildEncryptedPayload(meta, bsonList, serialized, "COL"));
                     return;
                 }
 
@@ -171,7 +171,7 @@ public class MongoEncryptHandler implements EncryptHandler {
 
                 if (isLeaf && meta.wholeObject()) {
                     byte[] serialized = structuredValueCodec.encode(mapDoc, "MAP");
-                    bsonContext.put(segment, buildEncryptedPayload(meta, serialized, "MAP"));
+                    bsonContext.put(segment, buildEncryptedPayload(meta, mapDoc, serialized, "MAP"));
                     return;
                 }
 
@@ -198,11 +198,12 @@ public class MongoEncryptHandler implements EncryptHandler {
 
     private Object buildEncryptedPayload(EncryptedFieldMetadata meta, Object value) {
         byte[] serialized = typeSerializer.serialize(value);
-        return buildEncryptedPayload(meta, serialized, resolveTypeMarker(meta.javaType()));
+        return buildEncryptedPayload(meta, value, serialized, resolveTypeMarker(meta.javaType()));
     }
 
     private Object buildEncryptedPayload(EncryptedFieldMetadata meta,
-                                          byte[] serialized, String typeMarker) {
+                                         Object value,
+                                         byte[] serialized, String typeMarker) {
         String namespace = meta.namespace().canonical();
         int dekVersion = keyVaultService.getActiveDekVersion(namespace);
         byte[] dek = keyVaultService.getDek(keyVaultService.getActiveKid(namespace));
@@ -226,7 +227,8 @@ public class MongoEncryptHandler implements EncryptHandler {
         if (meta.blindIndex()) {
             byte[] hmacKey = keyVaultService.getActiveHmacKey(namespace);
             BlindIndexEngine engine = new BlindIndexEngine(hmacKey);
-            blindIndex = engine.computeBlindIndex(meta.namespace(), meta.blindIndexFieldName(), serialized);
+            blindIndex = BlindIndexValueEncoder.computeBlindIndex(
+                    engine, typeSerializer, meta.namespace(), meta.blindIndexFieldName(), value);
         }
 
         return storageAdapter.buildEncryptedPayload(blob, typeMarker, blindIndex);
