@@ -173,6 +173,20 @@ public class KeyVaultService {
     }
 
     /**
+     * Get all unwrapped HMAC keys for the given namespace, ordered by key version.
+     */
+    public List<byte[]> getHmacKeys(String namespace) {
+        NamespaceKeyContext ctx = namespaceKeyContexts.get(namespace);
+        if (ctx == null) {
+            throw new FatalCryptoException("Vault not initialized for namespace: " + namespace);
+        }
+        return ctx.resolvedKeysByVersion.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getValue().hmacKey.clone())
+                .toList();
+    }
+
+    /**
      * Rotate the DEK for the given namespace.
      */
     public void rotateDek(String namespace) {

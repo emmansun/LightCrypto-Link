@@ -2,6 +2,7 @@ package io.github.emmansun.lightcrypto.adapter.mongodb;
 
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -58,5 +59,10 @@ public class TestKeyVaultService extends KeyVaultService {
     @Override
     public byte[] getActiveHmacKey(String namespace) {
         return hmacKey;
+    }
+
+    @Override
+    public List<byte[]> getHmacKeys(String namespace) {
+        return List.of(hmacKey);
     }
 }

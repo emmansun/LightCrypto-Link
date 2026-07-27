@@ -162,6 +162,22 @@ class LclEndToEndTest {
             .hasMessageContaining("Vault not found for namespace");
     }
 
+    @Test
+    @Order(5)
+    void blindIndexQuerySurvivesDekRotation() {
+        IntTestUser user = new IntTestUser();
+        user.setName("RotationProbe");
+        user.setPhone("13800009999");
+        userRepository.save(user);
+
+        keyVaultService.rotateDek(USER_PHONE_NS);
+
+        IntTestUser found = userRepository.findByPhone("13800009999");
+        assertThat(found).isNotNull();
+        assertThat(found.getId()).isEqualTo(user.getId());
+        assertThat(found.getPhone()).isEqualTo("13800009999");
+    }
+
     // ===== 11.1: Save and read back String with blindIndex =====
 
     @Test

@@ -127,9 +127,10 @@ public class CryptoMongoQueryCreator {
             // $in query: hash each element in the list
             if (value instanceof Document subDoc && subDoc.containsKey("$in")) {
                 List<?> inValues = (List<?>) subDoc.get("$in");
-                List<Object> hashed = inValues.stream()
-                        .map(v -> hashValue(matched, v))
-                        .toList();
+                List<Object> hashed = new ArrayList<>();
+                for (Object item : inValues) {
+                    hashed.addAll(hashValues(matched, item));
+                }
                 doc.put(rewrittenFieldName, new Document("$in", hashed));
                 doc.remove(key);
                 continue;
@@ -153,21 +154,25 @@ public class CryptoMongoQueryCreator {
                                 + "' on encrypted field '" + key + "'");
             }
 
-            // Simple 'is' query - use QueryTransformer for value rewrite
-            Object hashed = queryTransformer.rewriteQueryValue(value, namespace);
+            // Simple 'is' query - hash across all historical HMAC keys for this namespace.
+            List<Object> hashedValues = hashValues(matched, value);
+            Object hashed = hashedValues.size() == 1 ? hashedValues.get(0) : new Document("$in", hashedValues);
             doc.put(rewrittenFieldName, hashed);
             doc.remove(key);
         }
     }
 
-    private Object hashValue(EncryptedFieldMetadata meta, Object value) {
+    private List<Object> hashValues(EncryptedFieldMetadata meta, Object value) {
         String namespace = meta.namespace().canonical();
         keyVaultService.ensureVaultInitialized(namespace);
-        byte[] hmacKey = keyVaultService.getActiveHmacKey(namespace);
-        io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine engine =
-                new io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine(hmacKey);
-        return BlindIndexValueEncoder.computeBlindIndex(
-            engine, typeSerializer, meta.namespace(), meta.blindIndexFieldName(), value);
+        List<Object> hashes = new ArrayList<>();
+        for (byte[] hmacKey : keyVaultService.getHmacKeys(namespace)) {
+            io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine engine =
+                    new io.github.emmansun.lightcrypto.core.blindindex.BlindIndexEngine(hmacKey);
+            hashes.add(BlindIndexValueEncoder.computeBlindIndex(
+                    engine, typeSerializer, meta.namespace(), meta.blindIndexFieldName(), value));
+        }
+        return hashes;
     }
 
     private EncryptedFieldMetadata findEncryptedField(String key, List<EncryptedFieldMetadata> fields) {
