@@ -1,6 +1,8 @@
 package io.github.emmansun.lightcrypto.provider.alibaba;
 
 import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.model.GeneratedKey;
+import io.github.emmansun.lightcrypto.model.LclAlgorithms;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -9,6 +11,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.util.Base64;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -150,6 +153,63 @@ class AlibabaKmsCmkProviderTest {
             .hasMessageContaining("KMS AsymmetricDecrypt failed");
         }
 
+        // ===== SYMMETRIC mode tests =====
+
+        @Test
+        void symmetricGenerateKey_shouldReturnPlainAndWrappedKey() throws Exception {
+        TrackingSymmetricClient client = new TrackingSymmetricClient();
+        AlibabaKmsCmkProvider provider = new AlibabaKmsCmkProvider(
+            "key-test", Map.of("ns", "default"), client);
+
+        GeneratedKey generated = provider.generateKey(32);
+
+        assertThat(generated.rawKey()).containsExactly((byte) 1, (byte) 2, (byte) 3, (byte) 4);
+        assertThat(generated.wrappedKey().algorithm()).isEqualTo(LclAlgorithms.KMS_DATA_KEY);
+        assertThat(generated.wrappedKey().ciphertext()).containsExactly((byte) 9, (byte) 8, (byte) 7);
+        assertThat(generated.wrappedKey().metadata()).containsEntry("keyVersionId", "kv-123");
+
+        assertThat(client.lastGenerateDataKeyRequest).isNotNull();
+        assertThat(client.lastGenerateDataKeyRequest.getKeyId()).isEqualTo("key-test");
+        assertThat(client.lastGenerateDataKeyRequest.getNumberOfBytes()).isEqualTo(32);
+        assertThat(client.lastGenerateDataKeyRequest.getEncryptionContext().get("ns"))
+            .isEqualTo("default");
+        }
+
+        @Test
+        void symmetricUnwrap_shouldCallDecryptAndReturnPlaintext() throws Exception {
+        TrackingSymmetricClient client = new TrackingSymmetricClient();
+        AlibabaKmsCmkProvider provider = new AlibabaKmsCmkProvider(
+            "key-test", Map.of("ns", "default"), client);
+
+        byte[] plain = provider.unwrap(new WrappedKey(new byte[]{9, 8, 7}, LclAlgorithms.KMS_DATA_KEY));
+
+        assertThat(plain).containsExactly((byte) 1, (byte) 2, (byte) 3, (byte) 4);
+        assertThat(client.lastDecryptRequest).isNotNull();
+        assertThat(client.lastDecryptRequest.getEncryptionContext().get("ns")).isEqualTo("default");
+        assertThat(client.lastDecryptRequest.getCiphertextBlob())
+            .isEqualTo(Base64.getEncoder().encodeToString(new byte[]{9, 8, 7}));
+        }
+
+        @Test
+        void symmetricGenerateKey_shouldWrapClientFailure() throws Exception {
+        AlibabaKmsCmkProvider provider = new AlibabaKmsCmkProvider(
+            "key-test", Map.of("ns", "default"), new FailingGenerateDataKeyClient());
+
+        assertThatThrownBy(() -> provider.generateKey(32))
+            .isInstanceOf(CryptoException.class)
+            .hasMessageContaining("KMS GenerateDataKey failed");
+        }
+
+        @Test
+        void symmetricUnwrap_shouldWrapClientFailure() throws Exception {
+        AlibabaKmsCmkProvider provider = new AlibabaKmsCmkProvider(
+            "key-test", Map.of("ns", "default"), new FailingDecryptSymmetricClient());
+
+        assertThatThrownBy(() -> provider.unwrap(new WrappedKey(new byte[]{1, 2}, LclAlgorithms.KMS_DATA_KEY)))
+            .isInstanceOf(CryptoException.class)
+            .hasMessageContaining("KMS Decrypt failed");
+        }
+
     // ===== PublicKeyLoader tests =====
 
     @Test
@@ -220,6 +280,76 @@ class AlibabaKmsCmkProviderTest {
         @Override
         public com.aliyun.kms20160120.models.AsymmetricDecryptResponse asymmetricDecrypt(
                 com.aliyun.kms20160120.models.AsymmetricDecryptRequest request) {
+            throw new RuntimeException("boom");
+        }
+    }
+
+    private static class TrackingSymmetricClient extends com.aliyun.kms20160120.Client {
+        private com.aliyun.kms20160120.models.GenerateDataKeyRequest lastGenerateDataKeyRequest;
+        private com.aliyun.kms20160120.models.DecryptRequest lastDecryptRequest;
+
+        TrackingSymmetricClient() throws Exception {
+            super(new com.aliyun.teaopenapi.models.Config()
+                    .setAccessKeyId("test-ak")
+                    .setAccessKeySecret("test-sk")
+                    .setRegionId("cn-hangzhou"));
+        }
+
+        @Override
+        public com.aliyun.kms20160120.models.GenerateDataKeyResponse generateDataKey(
+                com.aliyun.kms20160120.models.GenerateDataKeyRequest request) {
+            this.lastGenerateDataKeyRequest = request;
+            com.aliyun.kms20160120.models.GenerateDataKeyResponseBody body =
+                    new com.aliyun.kms20160120.models.GenerateDataKeyResponseBody();
+            body.setPlaintext(Base64.getEncoder().encodeToString(new byte[]{1, 2, 3, 4}));
+            body.setCiphertextBlob(Base64.getEncoder().encodeToString(new byte[]{9, 8, 7}));
+            body.setKeyVersionId("kv-123");
+            com.aliyun.kms20160120.models.GenerateDataKeyResponse response =
+                    new com.aliyun.kms20160120.models.GenerateDataKeyResponse();
+            response.setBody(body);
+            return response;
+        }
+
+        @Override
+        public com.aliyun.kms20160120.models.DecryptResponse decrypt(
+                com.aliyun.kms20160120.models.DecryptRequest request) {
+            this.lastDecryptRequest = request;
+            com.aliyun.kms20160120.models.DecryptResponseBody body =
+                    new com.aliyun.kms20160120.models.DecryptResponseBody();
+            body.setPlaintext(Base64.getEncoder().encodeToString(new byte[]{1, 2, 3, 4}));
+            com.aliyun.kms20160120.models.DecryptResponse response =
+                    new com.aliyun.kms20160120.models.DecryptResponse();
+            response.setBody(body);
+            return response;
+        }
+    }
+
+    private static class FailingGenerateDataKeyClient extends com.aliyun.kms20160120.Client {
+        FailingGenerateDataKeyClient() throws Exception {
+            super(new com.aliyun.teaopenapi.models.Config()
+                    .setAccessKeyId("test-ak")
+                    .setAccessKeySecret("test-sk")
+                    .setRegionId("cn-hangzhou"));
+        }
+
+        @Override
+        public com.aliyun.kms20160120.models.GenerateDataKeyResponse generateDataKey(
+                com.aliyun.kms20160120.models.GenerateDataKeyRequest request) {
+            throw new RuntimeException("boom");
+        }
+    }
+
+    private static class FailingDecryptSymmetricClient extends com.aliyun.kms20160120.Client {
+        FailingDecryptSymmetricClient() throws Exception {
+            super(new com.aliyun.teaopenapi.models.Config()
+                    .setAccessKeyId("test-ak")
+                    .setAccessKeySecret("test-sk")
+                    .setRegionId("cn-hangzhou"));
+        }
+
+        @Override
+        public com.aliyun.kms20160120.models.DecryptResponse decrypt(
+                com.aliyun.kms20160120.models.DecryptRequest request) {
             throw new RuntimeException("boom");
         }
     }

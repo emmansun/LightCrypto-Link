@@ -23,11 +23,16 @@ import java.util.Map;
 public final class AzureKeyVaultCmkProvider implements CmkProvider {
     private static final String PROVIDER_ID = "azure-keyvault";
 
+    @FunctionalInterface
+    interface KeyUnwrapper {
+        byte[] unwrap(String keyName, String keyVersion, byte[] ciphertext);
+    }
+
     private final PublicKey publicKey;
-    private final KeyClient keyClient;
     private final String algorithm;
     private final String keyName;
     private final String keyVersion;
+    private final KeyUnwrapper keyUnwrapper;
 
     /**
      * Constructs a new Azure Key Vault asymmetric CMK provider.
@@ -42,6 +47,20 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
                                     String algorithm,
                                     String keyName,
                                     String keyVersion) {
+        this(publicKey, keyClient, algorithm, keyName, keyVersion,
+                (resolvedKeyName, resolvedKeyVersion, ciphertext) -> {
+                    CryptographyClient cryptoClient = keyClient.getCryptographyClient(resolvedKeyName, resolvedKeyVersion);
+                    UnwrapResult result = cryptoClient.unwrapKey(KeyWrapAlgorithm.RSA_OAEP_256, ciphertext);
+                    return result.getKey();
+                });
+    }
+
+    AzureKeyVaultCmkProvider(PublicKey publicKey,
+                             KeyClient keyClient,
+                             String algorithm,
+                             String keyName,
+                             String keyVersion,
+                             KeyUnwrapper keyUnwrapper) {
         if (publicKey == null) {
             throw new IllegalArgumentException("publicKey must not be null");
         }
@@ -49,10 +68,10 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
             throw new IllegalArgumentException("keyClient must not be null");
         }
         this.publicKey = publicKey;
-        this.keyClient = keyClient;
         this.algorithm = algorithm;
         this.keyName = keyName;
         this.keyVersion = keyVersion;
+        this.keyUnwrapper = keyUnwrapper;
     }
 
     @Override
@@ -85,9 +104,7 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
             if (cmkVersion == null || cmkVersion.isEmpty()) {
                 cmkVersion = keyVersion; // fallback to provider's key version if not present in metadata
             }
-            CryptographyClient cryptoClient = this.keyClient.getCryptographyClient(keyName, cmkVersion);
-            UnwrapResult result = cryptoClient.unwrapKey(KeyWrapAlgorithm.RSA_OAEP_256, wrappedKey.ciphertext());
-            return result.getKey();
+            return keyUnwrapper.unwrap(keyName, cmkVersion, wrappedKey.ciphertext());
         } catch (Exception e) {
             throw new CryptoException("Failed to unwrap key via Azure Key Vault", e);
         }

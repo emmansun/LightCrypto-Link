@@ -4,6 +4,8 @@ import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.models.JsonWebKey;
+import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,8 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.util.Base64;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -111,6 +115,97 @@ class AzureKeyVaultCmkProviderTest {
         assertThatThrownBy(() -> provider.unwrap(null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("WrappedKey must not be null");
+        }
+
+        @Test
+        void unwrap_shouldUseMetadataVersionWhenPresent() {
+        byte[] expected = new byte[]{1, 2, 3, 4};
+        byte[] ciphertext = new byte[]{9, 8, 7};
+            AtomicReference<String> usedVersion = new AtomicReference<>();
+
+            KeyClient keyClient = createDummyClient();
+
+        AzureKeyVaultCmkProvider provider = new AzureKeyVaultCmkProvider(
+                rsaKeyPair.getPublic(),
+                keyClient,
+                "RSA-OAEP-256",
+                "test-name",
+                "provider-version",
+                (keyName, keyVersion, wrappedCiphertext) -> {
+                    usedVersion.set(keyVersion);
+                    assertThat(keyName).isEqualTo("test-name");
+                    assertThat(wrappedCiphertext).containsExactly(ciphertext);
+                    return expected;
+                });
+
+        WrappedKey wrappedKey = new WrappedKey(
+            ciphertext,
+            "RSA-OAEP-256",
+            Map.of(CmkProvider.META_CMK_VERSION, "meta-version"));
+
+        assertThat(provider.unwrap(wrappedKey)).containsExactly(expected);
+            assertThat(usedVersion.get()).isEqualTo("meta-version");
+        }
+
+        @Test
+        void unwrap_shouldFallbackToProviderVersionWhenMetadataVersionMissing() {
+        byte[] expected = new byte[]{5, 6, 7, 8};
+        byte[] ciphertext = new byte[]{3, 2, 1};
+            AtomicReference<String> usedVersion = new AtomicReference<>();
+
+            KeyClient keyClient = createDummyClient();
+
+        AzureKeyVaultCmkProvider provider = new AzureKeyVaultCmkProvider(
+                rsaKeyPair.getPublic(),
+                keyClient,
+                "RSA-OAEP-256",
+                "test-name",
+                "provider-version",
+                (keyName, keyVersion, wrappedCiphertext) -> {
+                    usedVersion.set(keyVersion);
+                    assertThat(keyName).isEqualTo("test-name");
+                    assertThat(wrappedCiphertext).containsExactly(ciphertext);
+                    return expected;
+                });
+
+        WrappedKey wrappedKey = new WrappedKey(ciphertext, "RSA-OAEP-256");
+
+        assertThat(provider.unwrap(wrappedKey)).containsExactly(expected);
+            assertThat(usedVersion.get()).isEqualTo("provider-version");
+        }
+
+        @Test
+        void unwrap_shouldWrapClientExceptionAsCryptoException() {
+            KeyClient keyClient = createDummyClient();
+        byte[] ciphertext = new byte[]{1, 9, 9};
+        WrappedKey wrappedKey = new WrappedKey(
+            ciphertext,
+            "RSA-OAEP-256",
+            Map.of(CmkProvider.META_CMK_VERSION, "meta-version"));
+
+        AzureKeyVaultCmkProvider provider = new AzureKeyVaultCmkProvider(
+                rsaKeyPair.getPublic(),
+                keyClient,
+                "RSA-OAEP-256",
+                "test-name",
+                "provider-version",
+                (keyName, keyVersion, wrappedCiphertext) -> {
+                    throw new RuntimeException("boom");
+                });
+
+        assertThatThrownBy(() -> provider.unwrap(wrappedKey))
+            .isInstanceOf(CryptoException.class)
+            .hasMessageContaining("Failed to unwrap key via Azure Key Vault");
+        }
+
+        @Test
+        void unwrap_shouldRejectUnsupportedAlgorithm() {
+        AzureKeyVaultCmkProvider provider = createProvider();
+        WrappedKey wrappedKey = new WrappedKey(new byte[]{1, 2}, "RSA1_5");
+
+        assertThatThrownBy(() -> provider.unwrap(wrappedKey))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported algorithm");
         }
 
     // ===== JsonWebKeyToPublicKey tests =====
