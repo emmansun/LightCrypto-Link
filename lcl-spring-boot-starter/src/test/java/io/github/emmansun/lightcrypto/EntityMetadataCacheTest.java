@@ -739,4 +739,211 @@ class EntityMetadataCacheTest {
         assertThat(fields).hasSize(1);
         assertThat(fields.get(0).bsonFieldName()).isEqualTo("secret");
     }
+
+    static class TestCollectionCustomFieldNameEntity {
+        @Encrypted(fieldName = "tags_cipher")
+        private List<String> tags;
+    }
+
+    @Test
+    void customFieldNameIsUsedForCollectionBlindIndexFieldName() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestCollectionCustomFieldNameEntity.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("tags");
+        assertThat(fields.get(0).blindIndexFieldName()).isEqualTo("tags_cipher");
+    }
+
+    static class TestMapCustomFieldNameEntity {
+        @Encrypted(fieldName = "attrs_cipher")
+        private java.util.Map<String, String> attrs;
+    }
+
+    @Test
+    void customFieldNameIsUsedForMapBlindIndexFieldName() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestMapCustomFieldNameEntity.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("attrs");
+        assertThat(fields.get(0).blindIndexFieldName()).isEqualTo("attrs_cipher");
+    }
+
+    static class TestUnsupportedScalarEncryptedType {
+        @Encrypted
+        private Object unsupported;
+    }
+
+    @Test
+    void unsupportedScalarEncryptedTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestUnsupportedScalarEncryptedType.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("unsupported type")
+                .hasMessageContaining("unsupported");
+    }
+
+    static class TestWholeObjectWithDeepNestedEncryptedField {
+        @Encrypted
+        private Profile profile;
+
+        static class Profile {
+            private Child child;
+        }
+
+        static class Child {
+            @Encrypted
+            private String secret;
+        }
+    }
+
+    @Test
+    void wholeObjectWithDeepNestedEncryptedFieldIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestWholeObjectWithDeepNestedEncryptedField.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("whole-object encryption");
+    }
+
+    static class TestWholeObjectWithDeepNestedEncryptedInList {
+        @Encrypted
+        private Profile profile;
+
+        static class Profile {
+            private List<Child> children;
+        }
+
+        static class Child {
+            @Encrypted
+            private String secret;
+        }
+    }
+
+    @Test
+    void wholeObjectWithDeepNestedEncryptedInListIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestWholeObjectWithDeepNestedEncryptedInList.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("whole-object encryption");
+    }
+
+    static class TestWholeObjectWithDeepNestedEncryptedInMap {
+        @Encrypted
+        private Profile profile;
+
+        static class Profile {
+            private java.util.Map<String, Child> byId;
+        }
+
+        static class Child {
+            @Encrypted
+            private String secret;
+        }
+    }
+
+    @Test
+    void wholeObjectWithDeepNestedEncryptedInMapIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestWholeObjectWithDeepNestedEncryptedInMap.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("whole-object encryption");
+    }
+
+    static class TestWholeObjectNestedExclusions {
+        @Encrypted
+        private Profile profile;
+
+        static class Profile {
+            @Encrypted
+            private static String staticEncrypted = "ignore";
+
+            @org.springframework.data.annotation.Transient
+            @Encrypted
+            private String transientEncrypted;
+
+            @org.springframework.data.mongodb.core.mapping.DBRef
+            @Encrypted
+            private String refEncrypted;
+
+            private java.math.BigDecimal amount;
+        }
+    }
+
+    @Test
+    void wholeObjectIgnoresStaticAndExcludedNestedEncryptedFields() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWholeObjectNestedExclusions.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("profile");
+        assertThat(fields.get(0).wholeObject()).isTrue();
+    }
+
+    static class TestExplicitWholePojoFieldEntity {
+        @Encrypted(mode = io.github.emmansun.lightcrypto.annotation.EncryptionMode.WHOLE)
+        private TestUserWithWholeAddress.Address address;
+    }
+
+    @Test
+    void explicitWholeModeOnPojoFieldKeepsWholeObjectTrue() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestExplicitWholePojoFieldEntity.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("address");
+        assertThat(fields.get(0).wholeObject()).isTrue();
+    }
+
+    static class TestNonStaticInnerPojoTraversalEntity {
+        private Inner inner;
+
+        @Encrypted
+        private String phone;
+
+        class Inner {
+            @Encrypted
+            private String secret;
+        }
+    }
+
+    @Test
+    void nonStaticInnerPojoTraversalWorksAndSkipsSyntheticOuterReference() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestNonStaticInnerPojoTraversalEntity.class);
+
+        assertThat(fields).hasSize(2);
+        assertThat(fields.stream().map(EncryptedFieldMetadata::bsonFieldName).toList())
+                .containsExactlyInAnyOrder("phone", "inner.secret");
+    }
+
+    static class TestWholeObjectNonStaticInnerWithEncrypted {
+        @Encrypted
+        private Inner inner;
+
+        class Inner {
+            @Encrypted
+            private String secret;
+        }
+    }
+
+    @Test
+    void wholeObjectNonStaticInnerWithEncryptedFieldIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestWholeObjectNonStaticInnerWithEncrypted.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("whole-object encryption");
+    }
+
+    static class TestWholeObjectVeryDeepWithoutNestedEncrypted {
+        @Encrypted
+        private Level1 root;
+
+        static class Level1 { private Level2 next; }
+        static class Level2 { private Level3 next; }
+        static class Level3 { private Level4 next; }
+        static class Level4 { private Level5 next; }
+        static class Level5 { private Level6 next; }
+        static class Level6 { private Level7 next; }
+        static class Level7 { private String value; }
+    }
+
+    @Test
+    void wholeObjectVeryDeepWithoutNestedEncryptedStillAllowed() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWholeObjectVeryDeepWithoutNestedEncrypted.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("root");
+        assertThat(fields.get(0).wholeObject()).isTrue();
+    }
 }

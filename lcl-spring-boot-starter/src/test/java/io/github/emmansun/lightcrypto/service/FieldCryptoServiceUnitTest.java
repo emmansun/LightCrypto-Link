@@ -308,6 +308,101 @@ class FieldCryptoServiceUnitTest {
         }
 
         @Test
+        void decryptDocumentSkipsNestedFieldWhenIntermediateIsNotDocumentLike() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("profile", "secret"),
+            List.of(PathSegmentType.FIELD, PathSegmentType.FIELD),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("profile", "plain-profile");
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(raw.get("profile")).isEqualTo("plain-profile");
+        assertThat(keyVault.lastNamespace).isNull();
+        }
+
+        @Test
+        void decryptDocumentDecryptsNestedListElementsAndSkipsNonDocumentElements() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("items", "secret"),
+            List.of(PathSegmentType.LIST_ITER, PathSegmentType.FIELD),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        keyVault.dekByVersion.put(13, DEK);
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> item0 = new HashMap<>();
+        item0.put("secret", encryptedPayload("alice", "STR", 13));
+        List<Object> items = new ArrayList<>();
+        items.add(item0);
+        items.add("plain-item");
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("items", items);
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(((Map<?, ?>) items.get(0)).get("secret")).isEqualTo("alice");
+        assertThat(items.get(1)).isEqualTo("plain-item");
+        }
+
+        @Test
+        void decryptDocumentDecryptsNestedMapValuesAndSkipsNonDocumentValues() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("attrs", "secret"),
+            List.of(PathSegmentType.MAP_ITER, PathSegmentType.FIELD),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        keyVault.dekByVersion.put(14, DEK);
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> nested = new HashMap<>();
+        nested.put("secret", encryptedPayload("xv", "STR", 14));
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("x", nested);
+        attrs.put("y", "plain-value");
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("attrs", attrs);
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(((Map<?, ?>) ((Map<?, ?>) raw.get("attrs")).get("x")).get("secret")).isEqualTo("xv");
+        assertThat(((Map<?, ?>) raw.get("attrs")).get("y")).isEqualTo("plain-value");
+        }
+
+        @Test
+        void decryptDocumentSkipsMapIterWhenAsMapReturnsNull() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("attrs"),
+            List.of(PathSegmentType.MAP_ITER),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        FieldCryptoService service = createService(
+            List.of(meta),
+            keyVault,
+            new NoOpStructuredValueCodec(),
+            new NullAsMapDocumentAccessor());
+
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("x", encryptedPayload("xv", "STR", 14));
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("attrs", attrs);
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(((Map<?, ?>) raw.get("attrs")).get("x")).isEqualTo(attrs.get("x"));
+        }
+
+        @Test
         void decryptDocumentDecryptsWholeObjectMapFieldThroughStructuredCodec() {
         EncryptedFieldMetadata meta = metadata(
             List.of("attrs"),
@@ -400,6 +495,20 @@ class FieldCryptoServiceUnitTest {
                 keyVaultService,
                 new MapStorageAdapter(),
                 new MapDocumentAccessor(),
+                structuredValueCodec);
+    }
+
+    private static FieldCryptoService createService(List<EncryptedFieldMetadata> metadata,
+                                                    KeyVaultService keyVaultService,
+                                                    StructuredValueCodec structuredValueCodec,
+                                                    DocumentAccessor documentAccessor) {
+        EntityMetadataCache metadataCache = new StubEntityMetadataCache(metadata);
+        return new FieldCryptoService(
+                metadataCache,
+                new TypeDeserializer(),
+                keyVaultService,
+                new MapStorageAdapter(),
+                documentAccessor,
                 structuredValueCodec);
     }
 
@@ -529,6 +638,39 @@ class FieldCryptoServiceUnitTest {
             if (value instanceof Map<?, ?> map) {
                 return ((Map<String, Object>) map).entrySet();
             }
+            return null;
+        }
+    }
+
+    private static final class NullAsMapDocumentAccessor implements DocumentAccessor {
+        @Override
+        public Object getField(Object document, String field) {
+            if (!(document instanceof Map<?, ?> map)) {
+                return null;
+            }
+            return map.get(field);
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void setField(Object document, String field, Object value) {
+            if (document instanceof Map<?, ?> map) {
+                ((Map<String, Object>) map).put(field, value);
+            }
+        }
+
+        @Override
+        public boolean isDocumentLike(Object value) {
+            return value instanceof Map<?, ?>;
+        }
+
+        @Override
+        public Iterable<?> asList(Object value) {
+            return value instanceof List<?> list ? list : null;
+        }
+
+        @Override
+        public Iterable<Map.Entry<String, Object>> asMap(Object value) {
             return null;
         }
     }

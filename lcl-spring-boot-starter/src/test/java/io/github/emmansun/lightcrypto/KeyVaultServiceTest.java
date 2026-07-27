@@ -342,6 +342,102 @@ class KeyVaultServiceTest {
         assertThat(service.getHmacKeys(TEST_NAMESPACE).get(1)).hasSize(32);
     }
 
+        @Test
+        void getDekAndHmacLookupScansAcrossNamespaces() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        String ns1 = TEST_NAMESPACE;
+        String ns2 = "default.default.OtherEntity#field";
+
+        String kid1 = "v1-a1b2c3d4";
+        byte[] dek1 = fixedKey((byte) 0x11);
+        byte[] hmac1 = fixedKey((byte) 0x21);
+        vaultStore.documents.put(ns1, vaultDoc(ns1, kid1, List.of(activeEntry(kid1, dek1, hmac1))));
+
+        String kid2 = "v1-a1b2c3d5";
+        byte[] dek2 = fixedKey((byte) 0x31);
+        byte[] hmac2 = fixedKey((byte) 0x41);
+        vaultStore.documents.put(ns2, vaultDoc(ns2, kid2, List.of(activeEntry(kid2, dek2, hmac2))));
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+        service.ensureVaultInitialized(ns1);
+        service.ensureVaultInitialized(ns2);
+
+        assertThat(service.getDek(kid2)).containsExactly(dek2);
+        assertThat(service.getHmacKey(kid2)).containsExactly(hmac2);
+        }
+
+        @Test
+        void rotateDekPreservesAlreadyRotatedEntries() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        String kidRotated = "v1-a1b2c3d4";
+        String kidActive = "v2-a1b2c3d5";
+
+        KeyEntry rotated = new KeyEntry(
+            kidRotated,
+            KeyStatus.ROTATED,
+            fixedKey((byte) 0x11),
+            fixedKey((byte) 0x21),
+            "IDENTITY",
+            KeyCheckValue.computeDekKcv(fixedKey((byte) 0x11), KCV_ALGORITHM),
+            KeyCheckValue.computeHmacKcv(fixedKey((byte) 0x21)),
+            KeyCheckValue.computeBinding(fixedKey((byte) 0x21), fixedKey((byte) 0x11)),
+            Instant.now());
+
+        KeyEntry active = activeEntry(kidActive, fixedKey((byte) 0x31), fixedKey((byte) 0x41));
+        vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kidActive, List.of(rotated, active)));
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+        service.ensureVaultInitialized(TEST_NAMESPACE);
+        service.rotateDek(TEST_NAMESPACE);
+
+        VaultDocument updated = vaultStore.documents.get(TEST_NAMESPACE);
+        assertThat(updated.keys()).hasSize(3);
+        assertThat(updated.keys().stream().filter(k -> k.kid().equals(kidRotated)).findFirst().orElseThrow().status())
+            .isEqualTo(KeyStatus.ROTATED);
+        assertThat(updated.keys().stream().filter(k -> k.kid().equals(kidActive)).findFirst().orElseThrow().status())
+            .isEqualTo(KeyStatus.ROTATED);
+        assertThat(updated.activeKid()).startsWith("v3-");
+        }
+
+        @Test
+        void getHmacKeysAreSortedByParsedVersion() throws Exception {
+        KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+        byte[] hmacV1 = fixedKey((byte) 0x12);
+        byte[] hmacV2 = fixedKey((byte) 0x22);
+        byte[] hmacV3 = fixedKey((byte) 0x32);
+        KeyEntry v3 = activeEntry("v3-a1b2c3d3", fixedKey((byte) 0x13), hmacV3);
+        KeyEntry v1 = new KeyEntry(
+            "v1-a1b2c3d1",
+            KeyStatus.ROTATED,
+            fixedKey((byte) 0x11),
+            hmacV1,
+            "IDENTITY",
+            KeyCheckValue.computeDekKcv(fixedKey((byte) 0x11), KCV_ALGORITHM),
+            KeyCheckValue.computeHmacKcv(hmacV1),
+            KeyCheckValue.computeBinding(hmacV1, fixedKey((byte) 0x11)),
+            Instant.now());
+        KeyEntry v2 = new KeyEntry(
+            "v2-a1b2c3d2",
+            KeyStatus.ROTATED,
+            fixedKey((byte) 0x12),
+            hmacV2,
+            "IDENTITY",
+            KeyCheckValue.computeDekKcv(fixedKey((byte) 0x12), KCV_ALGORITHM),
+            KeyCheckValue.computeHmacKcv(hmacV2),
+            KeyCheckValue.computeBinding(hmacV2, fixedKey((byte) 0x12)),
+            Instant.now());
+        VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v3-a1b2c3d3", List.of(v3, v1, v2));
+
+        invokeVerifyAndLoadKeys(service, doc, TEST_NAMESPACE);
+
+        List<byte[]> keys = service.getHmacKeys(TEST_NAMESPACE);
+        assertThat(keys).hasSize(3);
+        assertThat(keys.get(0)).containsExactly(hmacV1);
+        assertThat(keys.get(1)).containsExactly(hmacV2);
+        assertThat(keys.get(2)).containsExactly(hmacV3);
+        }
+
     @Test
     void rotateDekRejectsMissingVault() {
         KeyVaultService service = new KeyVaultService(new InMemoryVaultStore(), new IdentityCmkProvider(), (KeyVaultProperties) null);
