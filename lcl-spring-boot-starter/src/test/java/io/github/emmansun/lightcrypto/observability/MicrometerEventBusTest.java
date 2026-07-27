@@ -116,4 +116,120 @@ class MicrometerEventBusTest {
         assertThat(timer).isNotNull();
         assertThat(timer.count()).isEqualTo(1);
     }
+
+    @Test
+    void blindIndexEventRecordsTimer() {
+        LclEvent event = LclEvent.builder()
+                .event("lcl.blind_index.compute.completed")
+                .tier(EventTier.L2)
+                .result("success")
+                .namespace("app.users#email")
+                .durationMicros(900)
+                .build();
+
+        bus.emit(event);
+
+        Timer timer = registry.find("lcl.blind_index.compute.duration").timer();
+        assertThat(timer).isNotNull();
+        assertThat(timer.count()).isEqualTo(1);
+    }
+
+    @Test
+    void unknownEventPrefixIsIgnored() {
+        LclEvent event = LclEvent.builder()
+                .event("lcl.unknown.domain.completed")
+                .tier(EventTier.L1)
+                .result("success")
+                .build();
+
+        bus.emit(event);
+
+        assertThat(registry.getMeters()).isEmpty();
+    }
+
+    @Test
+    void encryptEventWithNegativeDurationOnlyIncrementsCounter() {
+        LclEvent event = LclEvent.builder()
+                .event("lcl.crypto.encrypt.completed")
+                .tier(EventTier.L2)
+                .result("failure")
+                .algorithm("AES_256_GCM")
+                .namespace("app.users#email")
+                .durationMicros(-1)
+                .build();
+
+        bus.emit(event);
+
+        assertThat(registry.find("lcl.crypto.encrypt.duration").timer()).isNull();
+        Counter counter = registry.find("lcl.crypto.encrypt.total").counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void decryptEventWithNegativeDurationOnlyIncrementsCounter() {
+        LclEvent event = LclEvent.builder()
+                .event("lcl.crypto.decrypt.completed")
+                .tier(EventTier.L2)
+                .result("failure")
+                .algorithm("AES_256_GCM")
+                .namespace("app.users#email")
+                .durationMicros(-1)
+                .build();
+
+        bus.emit(event);
+
+        assertThat(registry.find("lcl.crypto.decrypt.duration").timer()).isNull();
+        Counter counter = registry.find("lcl.crypto.decrypt.total").counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void rotationEventWithNegativeDurationOnlyIncrementsCounter() {
+        LclEvent event = LclEvent.builder()
+                .event("lcl.rotation.execute.completed")
+                .tier(EventTier.L2)
+                .result("failure")
+                .namespace("app.users#email")
+                .durationMicros(-1)
+                .build();
+
+        bus.emit(event);
+
+        assertThat(registry.find("lcl.rotation.duration").timer()).isNull();
+        Counter counter = registry.find("lcl.rotation.total").counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void keyVaultLoadEventWithNegativeDurationIsIgnored() {
+        LclEvent event = LclEvent.builder()
+                .event("lcl.keyvault.load.completed")
+                .tier(EventTier.L2)
+                .result("success")
+                .namespace("app.users#email")
+                .durationMicros(-1)
+                .build();
+
+        bus.emit(event);
+
+        assertThat(registry.getMeters()).isEmpty();
+    }
+
+    @Test
+    void blindIndexEventWithNegativeDurationIsIgnored() {
+        LclEvent event = LclEvent.builder()
+                .event("lcl.blind_index.compute.completed")
+                .tier(EventTier.L2)
+                .result("success")
+                .namespace("app.users#email")
+                .durationMicros(-1)
+                .build();
+
+        bus.emit(event);
+
+        assertThat(registry.getMeters()).isEmpty();
+    }
 }

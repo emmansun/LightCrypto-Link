@@ -2,12 +2,14 @@ package io.github.emmansun.lightcrypto.diagnostics;
 
 import io.github.emmansun.lightcrypto.config.RuntimeProperties;
 import io.github.emmansun.lightcrypto.core.bootstrap.BootstrapResult;
+import io.github.emmansun.lightcrypto.core.bootstrap.KatRunner;
 import io.github.emmansun.lightcrypto.core.bootstrap.PhaseResult;
 import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -121,6 +123,53 @@ class DiagnosticsEndpointsTest {
         Map<String, Object> response = endpoint.katResults();
 
         assertThat(response.get("status")).isEqualTo("OK");
+        assertThat(response).containsKey("algorithms");
+    }
+
+    @Test
+    void katEndpoint_failedResultsExposeErrorAndBudget() throws Exception {
+        KatRunner katRunner = new KatRunner();
+        Field lastResultsField = KatRunner.class.getDeclaredField("lastResults");
+        lastResultsField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<String, KatRunner.KatPrimitiveResult> lastResults =
+                (Map<String, KatRunner.KatPrimitiveResult>) lastResultsField.get(katRunner);
+        lastResults.put("AES-256-GCM", new KatRunner.KatPrimitiveResult("AES-256-GCM", false, 12, "ciphertext mismatch"));
+        lastResults.put("KCV", new KatRunner.KatPrimitiveResult("KCV", true, 7, null));
+
+        RuntimeProperties props = new RuntimeProperties();
+        props.setBootstrapTimeout(Duration.ofSeconds(5));
+        LclBootstrapRunner runner = new LclBootstrapRunner(STUB_CMK, NoOpEventBus.INSTANCE, props, null) {
+            @Override
+            public KatRunner getKatRunner() {
+                return katRunner;
+            }
+        };
+
+        LclKatEndpoint endpoint = new LclKatEndpoint(runner, STUB_CMK);
+        Map<String, Object> response = endpoint.katResults();
+
+        assertThat(response.get("status")).isEqualTo("FAILED");
+        assertThat(response.get("totalDurationMs")).isEqualTo(19L);
+        assertThat(response.get("budgetMs")).isEqualTo(KatRunner.TOTAL_BUDGET_MS);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> algorithms = (Map<String, Object>) response.get("algorithms");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> aesResult = (Map<String, Object>) algorithms.get("AES-256-GCM");
+        assertThat(aesResult).containsEntry("passed", false);
+        assertThat(aesResult).containsEntry("error", "ciphertext mismatch");
+    }
+
+    @Test
+    void katEndpoint_rerunKatReturnsFreshResults() {
+        LclBootstrapRunner runner = createRunner(null);
+        LclKatEndpoint endpoint = new LclKatEndpoint(runner, STUB_CMK);
+
+        Map<String, Object> response = endpoint.rerunKat();
+
+        assertThat(response.get("status")).isEqualTo("OK");
+        assertThat(response.get("budgetMs")).isEqualTo(KatRunner.TOTAL_BUDGET_MS);
+        assertThat(response.get("totalDurationMs")).isInstanceOf(Long.class);
         assertThat(response).containsKey("algorithms");
     }
 }

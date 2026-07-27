@@ -4,9 +4,11 @@ import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.exception.OptimisticLockException;
 import io.github.emmansun.lightcrypto.spi.VaultDocument;
 import io.github.emmansun.lightcrypto.spi.VaultDocument.KeyEntry;
 import io.github.emmansun.lightcrypto.spi.VaultDocument.KeyStatus;
+import io.github.emmansun.lightcrypto.spi.VaultStore;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
@@ -15,8 +17,11 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.time.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -276,6 +281,91 @@ class KeyVaultServiceTest {
                 .hasRootCauseMessage("Invalid kid format: bad-kid");
     }
 
+    @Test
+    void ensureVaultInitializedCreatesVaultAndLoadsKeys() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+        service.ensureVaultInitialized(TEST_NAMESPACE);
+
+        assertThat(vaultStore.documents).containsKey(TEST_NAMESPACE);
+        VaultDocument stored = vaultStore.documents.get(TEST_NAMESPACE);
+        assertThat(stored.keys()).hasSize(1);
+        assertThat(stored.activeKid()).startsWith("v1-");
+        assertThat(service.getActiveKid(TEST_NAMESPACE)).isEqualTo(stored.activeKid());
+        assertThat(service.getActiveDekVersion(TEST_NAMESPACE)).isEqualTo(1);
+        assertThat(service.getActiveHmacKey(TEST_NAMESPACE)).hasSize(32);
+        assertThat(service.getHmacKeys(TEST_NAMESPACE)).hasSize(1);
+    }
+
+    @Test
+    void ensureVaultInitializedFallsBackToConcurrentExistingDocument() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        byte[] dek = fixedKey((byte) 0x31);
+        byte[] hmac = fixedKey((byte) 0x41);
+        String kid = "v1-a1b2c3d4";
+        vaultStore.concurrentExistingDoc = vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac)));
+        vaultStore.failFirstSave = true;
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+        service.ensureVaultInitialized(TEST_NAMESPACE);
+
+        assertThat(service.getActiveKid(TEST_NAMESPACE)).isEqualTo(kid);
+        assertThat(service.getDek(kid)).containsExactly(dek);
+        assertThat(vaultStore.documents.get(TEST_NAMESPACE)).isEqualTo(vaultStore.concurrentExistingDoc);
+    }
+
+    @Test
+    void rotateDekAddsNewActiveVersionAndPreservesOlderHmacKeyOrder() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        String kid = "v1-a1b2c3d4";
+        byte[] dek = fixedKey((byte) 0x11);
+        byte[] hmac = fixedKey((byte) 0x22);
+        vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac))));
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+        service.ensureVaultInitialized(TEST_NAMESPACE);
+        byte[] previousActiveHmac = service.getActiveHmacKey(TEST_NAMESPACE);
+
+        service.rotateDek(TEST_NAMESPACE);
+
+        VaultDocument rotated = vaultStore.documents.get(TEST_NAMESPACE);
+        assertThat(rotated.version()).isEqualTo(2L);
+        assertThat(rotated.keys()).hasSize(2);
+        assertThat(rotated.keys().get(0).status()).isEqualTo(KeyStatus.ROTATED);
+        assertThat(rotated.keys().get(1).status()).isEqualTo(KeyStatus.ACTIVE);
+        assertThat(service.getActiveKid(TEST_NAMESPACE)).isEqualTo(rotated.activeKid());
+        assertThat(service.getActiveDekVersion(TEST_NAMESPACE)).isEqualTo(2);
+        assertThat(service.getHmacKeys(TEST_NAMESPACE)).hasSize(2);
+        assertThat(service.getHmacKeys(TEST_NAMESPACE).get(0)).containsExactly(previousActiveHmac);
+        assertThat(service.getHmacKeys(TEST_NAMESPACE).get(1)).hasSize(32);
+    }
+
+    @Test
+    void rotateDekRejectsMissingVault() {
+        KeyVaultService service = new KeyVaultService(new InMemoryVaultStore(), new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+        assertThatThrownBy(() -> service.rotateDek(TEST_NAMESPACE))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("Vault not found for namespace");
+    }
+
+    @Test
+    void rotateDekWrapsOptimisticLockException() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        String kid = "v1-a1b2c3d4";
+        vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kid,
+                List.of(activeEntry(kid, fixedKey((byte) 0x11), fixedKey((byte) 0x22)))));
+        vaultStore.failRotateWithOptimisticLock = true;
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+        assertThatThrownBy(() -> service.rotateDek(TEST_NAMESPACE))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("Concurrent vault rotation detected");
+    }
+
     private static void invokeVerifyAndLoadKeys(KeyVaultService service, VaultDocument doc, String namespace) throws Exception {
         Method method = KeyVaultService.class.getDeclaredMethod("verifyAndLoadKeys", VaultDocument.class, String.class);
         method.setAccessible(true);
@@ -359,6 +449,49 @@ class KeyVaultServiceTest {
         @Override
         public byte[] unwrap(WrappedKey wrappedKey) {
             throw new IllegalStateException("broken unwrap");
+        }
+    }
+
+    private static final class InMemoryVaultStore implements VaultStore {
+        private final Map<String, VaultDocument> documents = new java.util.HashMap<>();
+        private boolean failFirstSave;
+        private boolean failRotateWithOptimisticLock;
+        private VaultDocument concurrentExistingDoc;
+
+        @Override
+        public void save(VaultDocument doc) {
+            if (failFirstSave) {
+                failFirstSave = false;
+                if (concurrentExistingDoc != null) {
+                    documents.put(concurrentExistingDoc.namespace(), concurrentExistingDoc);
+                }
+                throw new RuntimeException("duplicate key");
+            }
+            documents.put(doc.namespace(), doc);
+        }
+
+        @Override
+        public Optional<VaultDocument> load(String namespace) {
+            return Optional.ofNullable(documents.get(namespace));
+        }
+
+        @Override
+        public boolean exists(String namespace) {
+            return documents.containsKey(namespace);
+        }
+
+        @Override
+        public VaultDocument rotate(VaultDocument updatedDoc) {
+            if (failRotateWithOptimisticLock) {
+                throw new OptimisticLockException("stale version");
+            }
+            documents.put(updatedDoc.namespace(), updatedDoc);
+            return updatedDoc;
+        }
+
+        @Override
+        public List<VaultDocument> loadAll() {
+            return new ArrayList<>(documents.values());
         }
     }
 }
