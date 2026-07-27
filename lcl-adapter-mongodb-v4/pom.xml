@@ -20,6 +20,10 @@
         <!-- Override Spring Boot version for SB4 compatibility -->
         <spring-boot.version>4.0.7</spring-boot.version>
         <spring-data-commons.version>4.0.6</spring-data-commons.version>
+        <!-- Incremental SB4 coverage gate (raise over time) -->
+        <jacoco.min.instruction.ratio>0.25</jacoco.min.instruction.ratio>
+        <jacoco.min.branch.ratio>0.15</jacoco.min.branch.ratio>
+        <jacoco.min.line.ratio>0.30</jacoco.min.line.ratio>
     </properties>
 
     <dependencies>

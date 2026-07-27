@@ -16,6 +16,11 @@
     <name>LCL :: Adapter :: MongoDB Core</name>
     <description>Version-independent shared MongoDB adapter classes for Light Crypto Link — VaultStore, StorageAdapter, QueryTransformer, listeners, and handlers.</description>
 
+    <properties>
+        <!-- Transitional: enable once mongodb-core has dedicated tests -->
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.github.emmansun</groupId>

@@ -42,7 +42,7 @@ jobs:
         run: mvn -B -pl lcl-adapter-mongodb-v4 -am test
 
       - name: Install Core Artifacts for Module-Scoped Checks
-        run: mvn -B -pl lcl-spi,lcl-core -am -DskipTests install
+        run: mvn -B -pl lcl-spi,lcl-core -am -DskipTests -Djacoco.skip=true install
 
       - name: Checkstyle
         run: mvn -B -pl lcl-spring-boot-starter checkstyle:check
