@@ -46,3 +46,7 @@ Notes:
 | `LocalDate`, `LocalDateTime` | yes | yes |
 | `byte[]` | yes | yes |
 | `Enum` | yes | yes |
+
+Notes:
+- `LocalDateTime` is serialized with millisecond precision (`SSS`) to stay compatible with the Node.js implementation.
+- Sub-millisecond precision is truncated during serialization/deserialization.
