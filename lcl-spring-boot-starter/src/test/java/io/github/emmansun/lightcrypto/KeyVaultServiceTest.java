@@ -366,6 +366,140 @@ class KeyVaultServiceTest {
                 .hasMessageContaining("Concurrent vault rotation detected");
     }
 
+    @Test
+    void getDekByVersionReturnsExpectedKeyAfterInitAndRotate() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        String kid = "v1-a1b2c3d4";
+        byte[] dekV1 = fixedKey((byte) 0x11);
+        byte[] hmacV1 = fixedKey((byte) 0x22);
+        vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dekV1, hmacV1))));
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+        service.ensureVaultInitialized(TEST_NAMESPACE);
+
+        byte[] loadedV1 = service.getDekByVersion(TEST_NAMESPACE, 1);
+        assertThat(loadedV1).containsExactly(dekV1);
+
+        service.rotateDek(TEST_NAMESPACE);
+        byte[] loadedV2 = service.getDekByVersion(TEST_NAMESPACE, 2);
+        assertThat(loadedV2).hasSize(32);
+    }
+
+    @Test
+    void getDekByVersionThrowsWhenNamespaceNotInitialized() {
+        KeyVaultService service = new KeyVaultService(new InMemoryVaultStore(), new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+        assertThatThrownBy(() -> service.getDekByVersion(TEST_NAMESPACE, 1))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("Vault not initialized for namespace");
+    }
+
+    @Test
+    void getDekByVersionThrowsWhenVersionNotFound() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        String kid = "v1-a1b2c3d4";
+        vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kid,
+                List.of(activeEntry(kid, fixedKey((byte) 0x11), fixedKey((byte) 0x22)))));
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+        service.ensureVaultInitialized(TEST_NAMESPACE);
+
+        assertThatThrownBy(() -> service.getDekByVersion(TEST_NAMESPACE, 9))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("No key found for namespace")
+                .hasMessageContaining("dekVersion 9");
+    }
+
+            @Test
+            void getActiveDekVersionThrowsWhenNamespaceNotInitialized() {
+            KeyVaultService service = new KeyVaultService(new InMemoryVaultStore(), new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+            assertThatThrownBy(() -> service.getActiveDekVersion(TEST_NAMESPACE))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("Vault not initialized for namespace");
+            }
+
+            @Test
+            void getHmacKeysThrowsWhenNamespaceNotInitialized() {
+            KeyVaultService service = new KeyVaultService(new InMemoryVaultStore(), new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+            assertThatThrownBy(() -> service.getHmacKeys(TEST_NAMESPACE))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("Vault not initialized for namespace");
+            }
+
+            @Test
+            void ensureVaultInitializedSkipsReloadWhenCacheEntryIsFresh() {
+            InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+            String kid = "v1-a1b2c3d4";
+            vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kid,
+                List.of(activeEntry(kid, fixedKey((byte) 0x11), fixedKey((byte) 0x22)))));
+
+            KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+            service.ensureVaultInitialized(TEST_NAMESPACE);
+            service.ensureVaultInitialized(TEST_NAMESPACE);
+
+            assertThat(vaultStore.loadCalls).isEqualTo(1);
+            }
+
+            @Test
+            void ensureVaultInitializedReloadsWhenCacheEntryExpired() {
+            InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+            String kid = "v1-a1b2c3d4";
+            byte[] dek = fixedKey((byte) 0x11);
+            byte[] hmac = fixedKey((byte) 0x22);
+            vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kid, List.of(activeEntry(kid, dek, hmac))));
+
+            KeyVaultProperties props = new KeyVaultProperties();
+            props.getCache().setTtl(Duration.ofHours(1));
+            Clock expiredClock = Clock.fixed(Instant.parse("2020-01-01T00:00:00Z"), ZoneOffset.UTC);
+            KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), props, expiredClock);
+
+            service.ensureVaultInitialized(TEST_NAMESPACE);
+            vaultStore.documents.put(TEST_NAMESPACE, vaultDoc(TEST_NAMESPACE, kid,
+                List.of(activeEntry(kid, fixedKey((byte) 0x11), fixedKey((byte) 0x22)))));
+            service.ensureVaultInitialized(TEST_NAMESPACE);
+
+            assertThat(vaultStore.loadCalls).isEqualTo(2);
+            }
+
+            @Test
+            void verifyAndLoadKeysRejectsNullAndEmptyEntries() {
+            KeyVaultService service = new KeyVaultService(null, new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+            VaultDocument nullKeysDoc = new VaultDocument(
+                TEST_NAMESPACE,
+                null,
+                "v1-a1b2c3d4",
+                1L,
+                "test",
+                "cmk:test",
+                Instant.now(),
+                Instant.now());
+
+            VaultDocument emptyKeysDoc = vaultDoc(TEST_NAMESPACE, "v1-a1b2c3d4", List.of());
+
+            assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, nullKeysDoc, TEST_NAMESPACE))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("Vault has no key entries");
+
+            assertThatThrownBy(() -> invokeVerifyAndLoadKeys(service, emptyKeysDoc, TEST_NAMESPACE))
+                .isInstanceOf(FatalCryptoException.class)
+                .hasMessageContaining("Vault has no key entries");
+            }
+
+    @Test
+    void ensureVaultInitializedThrowsWhenConcurrentSaveFailsAndNoDocumentExists() {
+        InMemoryVaultStore vaultStore = new InMemoryVaultStore();
+        vaultStore.failFirstSave = true;
+
+        KeyVaultService service = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
+
+        assertThatThrownBy(() -> service.ensureVaultInitialized(TEST_NAMESPACE))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("duplicate key");
+    }
+
     private static void invokeVerifyAndLoadKeys(KeyVaultService service, VaultDocument doc, String namespace) throws Exception {
         Method method = KeyVaultService.class.getDeclaredMethod("verifyAndLoadKeys", VaultDocument.class, String.class);
         method.setAccessible(true);
@@ -457,6 +591,7 @@ class KeyVaultServiceTest {
         private boolean failFirstSave;
         private boolean failRotateWithOptimisticLock;
         private VaultDocument concurrentExistingDoc;
+        private int loadCalls;
 
         @Override
         public void save(VaultDocument doc) {
@@ -472,6 +607,7 @@ class KeyVaultServiceTest {
 
         @Override
         public Optional<VaultDocument> load(String namespace) {
+            loadCalls++;
             return Optional.ofNullable(documents.get(namespace));
         }
 

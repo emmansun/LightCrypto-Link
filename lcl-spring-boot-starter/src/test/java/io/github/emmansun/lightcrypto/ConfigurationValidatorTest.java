@@ -23,6 +23,13 @@ class ConfigurationValidatorTest {
     // ===== KmsProperties validation =====
 
     @Test
+    void supportsRecognizesExpectedTypes() {
+        assertThat(validator.supports(KmsProperties.class)).isTrue();
+        assertThat(validator.supports(CryptographyProperties.class)).isTrue();
+        assertThat(validator.supports(String.class)).isFalse();
+    }
+
+    @Test
     void localSymmetricWithoutKeyHexOrKeyHexFileIsRejected() {
         KmsProperties props = new KmsProperties();
         KmsProperties.ProviderEntry entry = new KmsProperties.ProviderEntry();
@@ -52,6 +59,39 @@ class ConfigurationValidatorTest {
         validator.validate(props, errors);
 
         assertThat(errors.hasErrors()).isFalse();
+    }
+
+    @Test
+    void localSymmetricWithKeyHexFileIsValid() {
+        KmsProperties props = new KmsProperties();
+        KmsProperties.ProviderEntry entry = new KmsProperties.ProviderEntry();
+        entry.setId("local");
+        entry.setType(KmsProperties.ProviderType.LOCAL_SYMMETRIC);
+        entry.setKeyHexFile("/tmp/key.hex");
+        props.setProviders(List.of(entry));
+
+        Errors errors = new BeanPropertyBindingResult(props, "kmsProperties");
+        validator.validate(props, errors);
+
+        assertThat(errors.hasErrors()).isFalse();
+    }
+
+    @Test
+    void localSymmetricBlankKeyHexAndKeyHexFileIsRejected() {
+        KmsProperties props = new KmsProperties();
+        KmsProperties.ProviderEntry entry = new KmsProperties.ProviderEntry();
+        entry.setId("local");
+        entry.setType(KmsProperties.ProviderType.LOCAL_SYMMETRIC);
+        entry.setKeyHex("   ");
+        entry.setKeyHexFile("\t");
+        props.setProviders(List.of(entry));
+
+        Errors errors = new BeanPropertyBindingResult(props, "kmsProperties");
+        validator.validate(props, errors);
+
+        assertThat(errors.hasErrors()).isTrue();
+        assertThat(errors.getAllErrors().stream().anyMatch(e ->
+                e.getDefaultMessage().contains("must have either 'keyHex' or 'keyHexFile'"))).isTrue();
     }
 
     @Test
@@ -110,6 +150,15 @@ class ConfigurationValidatorTest {
 
         Errors errors = new BeanPropertyBindingResult(props, "cryptographyProperties");
         validator.validate(props, errors);
+
+        assertThat(errors.hasErrors()).isFalse();
+    }
+
+    @Test
+    void validateIgnoresUnsupportedTargetType() {
+        Errors errors = new BeanPropertyBindingResult("not-a-config", "target");
+
+        validator.validate("not-a-config", errors);
 
         assertThat(errors.hasErrors()).isFalse();
     }

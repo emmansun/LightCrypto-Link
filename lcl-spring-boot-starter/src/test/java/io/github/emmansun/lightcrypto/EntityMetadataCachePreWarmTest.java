@@ -42,6 +42,17 @@ class EntityMetadataCachePreWarmTest {
     }
 
     @Test
+    void preWarmIsIdempotentForSameClass() {
+        cache.preWarm(TestUser.class);
+        List<EncryptedFieldMetadata> first = cache.getEncryptedFields(TestUser.class);
+
+        cache.preWarm(TestUser.class);
+        List<EncryptedFieldMetadata> second = cache.getEncryptedFields(TestUser.class);
+
+        assertThat(first).isSameAs(second);
+    }
+
+    @Test
     void methodHandleGetterReadsFieldValue() throws Throwable {
         cache.preWarm(TestUser.class);
 

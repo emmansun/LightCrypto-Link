@@ -233,6 +233,149 @@ class FieldCryptoServiceUnitTest {
             .hasMessageContaining("Failed to decode structured payload for type marker: DOC");
         }
 
+        @Test
+        void decryptDocumentSkipsNonEncryptedFieldPayload() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("secret"),
+            List.of(PathSegmentType.FIELD),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("secret", "plain-text");
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(raw.get("secret")).isEqualTo("plain-text");
+        assertThat(keyVault.lastNamespace).isNull();
+        }
+
+        @Test
+        void decryptDocumentSkipsEncryptedPayloadWhenBlobMissing() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("secret"),
+            List.of(PathSegmentType.FIELD),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("secret", Map.of("_e", 1, "_t", "STR"));
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(raw.get("secret")).isEqualTo(Map.of("_e", 1, "_t", "STR"));
+        assertThat(keyVault.lastNamespace).isNull();
+        }
+
+        @Test
+        void decryptDocumentSkipsListIterWhenTargetIsNotList() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("tags"),
+            List.of(PathSegmentType.LIST_ITER),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("tags", "not-a-list");
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(raw.get("tags")).isEqualTo("not-a-list");
+        }
+
+        @Test
+        void decryptDocumentSkipsMapIterWhenTargetIsNotDocumentLike() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("attrs"),
+            List.of(PathSegmentType.MAP_ITER),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("attrs", "not-a-map");
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(raw.get("attrs")).isEqualTo("not-a-map");
+        }
+
+        @Test
+        void decryptDocumentDecryptsWholeObjectMapFieldThroughStructuredCodec() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("attrs"),
+            List.of(PathSegmentType.MAP_ITER),
+            true,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        keyVault.dekByVersion.put(10, DEK);
+        CapturingStructuredValueCodec codec = new CapturingStructuredValueCodec();
+        FieldCryptoService service = createService(List.of(meta), keyVault, codec);
+
+        byte[] plaintext = "{\"a\":1}".getBytes(StandardCharsets.UTF_8);
+        String blob = CryptoCodec.encrypt(DEK, plaintext, AlgorithmId.AES_256_GCM, Namespace.parse(NAMESPACE), 10);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("_e", 1);
+        payload.put("_t", "MAP");
+        payload.put("c", blob);
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("attrs", payload);
+
+        service.decryptDocument(raw, DemoEntity.class);
+
+        assertThat(raw.get("attrs")).isEqualTo(List.of("decoded", "MAP"));
+        assertThat(codec.lastTypeMarker).isEqualTo("MAP");
+        assertThat(codec.lastData).containsExactly(plaintext);
+        }
+
+        @Test
+        void decryptDocumentWrapsDecryptFailureAsDecryptionException() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("secret"),
+            List.of(PathSegmentType.FIELD),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        byte[] wrongDek = fixedKey((byte) 0x3B);
+        keyVault.dekByVersion.put(11, wrongDek);
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("secret", encryptedPayload("alice", "STR", 11));
+
+        assertThatThrownBy(() -> service.decryptDocument(raw, DemoEntity.class))
+            .isInstanceOf(DecryptionException.class)
+            .hasMessageContaining("Failed to decrypt field 'secret'");
+        }
+
+        @Test
+        void decryptDocumentWrapsDeserializeFailureAsDecryptionException() {
+        EncryptedFieldMetadata meta = metadata(
+            List.of("secret"),
+            List.of(PathSegmentType.FIELD),
+            false,
+            NAMESPACE);
+        FakeKeyVaultService keyVault = new FakeKeyVaultService();
+        keyVault.dekByVersion.put(12, DEK);
+        FieldCryptoService service = createService(List.of(meta), keyVault, new NoOpStructuredValueCodec());
+
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("secret", encryptedPayload("alice", "UNKNOWN", 12));
+
+        assertThatThrownBy(() -> service.decryptDocument(raw, DemoEntity.class))
+            .isInstanceOf(DecryptionException.class)
+            .hasMessageContaining("Failed to deserialize field 'secret'")
+            .hasMessageContaining("type marker 'UNKNOWN'");
+        }
+
     private static FieldCryptoService createServiceWithEmptyMetadata() {
         EntityMetadataCache metadataCache = new EntityMetadataCache(
             new CryptographyProperties(),

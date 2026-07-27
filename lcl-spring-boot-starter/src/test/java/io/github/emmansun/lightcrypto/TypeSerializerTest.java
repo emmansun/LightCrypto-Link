@@ -70,6 +70,48 @@ class TypeSerializerTest extends LclTestBase {
                 .isInstanceOf(UnsupportedTypeException.class);
     }
 
+    @Test
+    void serializeReturnsNullForNullInput() {
+        assertThat(serializer.serialize(null)).isNull();
+        assertThat(serializer.serializeToString(null)).isNull();
+    }
+
+    @Test
+    void serializeReturnsSameReferenceForByteArray() {
+        byte[] bytes = new byte[]{1, 2, 3};
+
+        byte[] out = serializer.serialize(bytes);
+
+        assertThat(out).isSameAs(bytes);
+    }
+
+    @Test
+    void resolveTypeMarkerSupportsEnumType() {
+        assertThat(resolveTypeMarker(TestEnum.class)).isEqualTo("ENUM:" + TestEnum.class.getName());
+    }
+
+    @Test
+    void resolveTypeMarkerRejectsUnsupportedTypeWithMessage() {
+        assertThatThrownBy(() -> resolveTypeMarker(Object.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("Unsupported type for encryption")
+                .hasMessageContaining(Object.class.getName());
+    }
+
+    @Test
+    void isSupportedMatchesExpectedBoundaries() {
+        assertThat(TypeSerializer.isSupported(String.class)).isTrue();
+        assertThat(TypeSerializer.isSupported(byte[].class)).isTrue();
+        assertThat(TypeSerializer.isSupported(TestEnum.class)).isTrue();
+        assertThat(TypeSerializer.isSupported(int.class)).isFalse();
+        assertThat(TypeSerializer.isSupported(Object.class)).isFalse();
+    }
+
+    private enum TestEnum {
+        A,
+        B
+    }
+
     private void assertDeterministic(Object value) {
         String s1 = serializer.serializeToString(value);
         String s2 = serializer.serializeToString(value);

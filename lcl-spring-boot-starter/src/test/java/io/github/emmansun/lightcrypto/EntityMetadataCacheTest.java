@@ -356,6 +356,29 @@ class EntityMetadataCacheTest {
         assertThat(fields.get(0).bsonFieldName()).isEqualTo("phone");
     }
 
+    @Test
+    void inheritedAndDeclaredEncryptedFieldsAreBothDiscovered() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestInheritedAndDeclaredEncryptedEntity.class);
+
+        assertThat(fields).hasSize(2);
+        assertThat(fields.stream().map(EncryptedFieldMetadata::bsonFieldName).toList())
+                .containsExactlyInAnyOrder("phone", "email");
+    }
+
+    @Test
+    void namespaceUsesTenantAndRealmFromProperties() {
+        TenantProperties tenantProperties = new TenantProperties();
+        tenantProperties.setTenant("tenant-a");
+        tenantProperties.setRealm("realm-b");
+        EntityMetadataCache customCache = new EntityMetadataCache(new CryptographyProperties(), tenantProperties);
+
+        List<EncryptedFieldMetadata> fields = customCache.getEncryptedFields(TestUser.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).namespace().canonical())
+                .isEqualTo("tenant-a.realm-b.TestUser#phone");
+    }
+
     static class TestPojoFieldWithElementMode {
         @Encrypted(mode = io.github.emmansun.lightcrypto.annotation.EncryptionMode.ELEMENT)
         private TestUserWithWholeAddress.Address address;
@@ -423,6 +446,11 @@ class EntityMetadataCacheTest {
     }
 
     static class TestInheritedEncryptedEntity extends TestBaseEncryptedEntity {
+    }
+
+    static class TestInheritedAndDeclaredEncryptedEntity extends TestBaseEncryptedEntity {
+        @Encrypted
+        private String email;
     }
 
     // --- Additional coverage: static fields, isPojoType edge cases, nested encrypted in collections/maps ---
@@ -583,6 +611,18 @@ class EntityMetadataCacheTest {
                 .isInstanceOf(UnsupportedTypeException.class);
     }
 
+    static class TestMapWithWildcardKeyType {
+        @Encrypted
+        private java.util.Map<?, String> wildcardKeyMap;
+    }
+
+    @Test
+    void mapWithWildcardKeyTypeIsRejected() {
+        assertThatThrownBy(() -> cache.getEncryptedFields(TestMapWithWildcardKeyType.class))
+                .isInstanceOf(UnsupportedTypeException.class)
+                .hasMessageContaining("must use String keys");
+    }
+
     static class TestCollectionWithWildcardElementType {
         @Encrypted
         private List<?> wildcardList;
@@ -592,5 +632,111 @@ class EntityMetadataCacheTest {
     void collectionWithWildcardElementTypeIsRejected() {
         assertThatThrownBy(() -> cache.getEncryptedFields(TestCollectionWithWildcardElementType.class))
                 .isInstanceOf(UnsupportedTypeException.class);
+    }
+
+    @Test
+    void namespaceFallsBackToDefaultWhenTenantPropertiesNull() {
+        EntityMetadataCache customCache = new EntityMetadataCache(new CryptographyProperties(), null);
+
+        List<EncryptedFieldMetadata> fields = customCache.getEncryptedFields(TestUser.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).namespace().canonical())
+                .isEqualTo("default.default.TestUser#phone");
+    }
+
+    static class TestElementModeNonPojoEntity {
+        @Encrypted(mode = io.github.emmansun.lightcrypto.annotation.EncryptionMode.ELEMENT)
+        private String phone;
+
+        @Encrypted(mode = io.github.emmansun.lightcrypto.annotation.EncryptionMode.ELEMENT)
+        private List<String> tags;
+    }
+
+    @Test
+    void scalarAndCollectionElementModeAreAllowedForNonPojoTypes() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestElementModeNonPojoEntity.class);
+
+        assertThat(fields).hasSize(2);
+        EncryptedFieldMetadata scalar = fields.stream()
+                .filter(f -> "phone".equals(f.bsonFieldName()))
+                .findFirst()
+                .orElseThrow();
+        EncryptedFieldMetadata list = fields.stream()
+                .filter(f -> "tags".equals(f.bsonFieldName()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(scalar.wholeObject()).isFalse();
+        assertThat(list.wholeObject()).isFalse();
+        assertThat(list.pathTypes()).containsExactly(PathSegmentType.LIST_ITER);
+    }
+
+    static class TestWholeObjectWithoutNestedEncrypted {
+        @Encrypted
+        private Profile profile;
+
+        static class Profile {
+            private List<PlainChild> children;
+            private java.util.Map<String, PlainChild> byId;
+            private PlainChild direct;
+        }
+
+        static class PlainChild {
+            private String value;
+            private List<String> tags;
+            private java.util.Map<String, String> attributes;
+        }
+    }
+
+    @Test
+    void wholeObjectPojoWithoutNestedEncryptedFieldsPassesDeepTraversal() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWholeObjectWithoutNestedEncrypted.class);
+
+        assertThat(fields).hasSize(1);
+        EncryptedFieldMetadata meta = fields.get(0);
+        assertThat(meta.bsonFieldName()).isEqualTo("profile");
+        assertThat(meta.wholeObject()).isTrue();
+    }
+
+    static class TestWholeObjectCircularWithoutNestedEncrypted {
+        @Encrypted
+        private Node node;
+
+        static class Node {
+            private Node next;
+            private String name;
+        }
+    }
+
+    @Test
+    void wholeObjectPojoWithCircularStructureButNoNestedEncryptedFieldsIsAllowed() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWholeObjectCircularWithoutNestedEncrypted.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("node");
+        assertThat(fields.get(0).wholeObject()).isTrue();
+    }
+
+    static class TestWrapperHeavyEntity {
+        @Encrypted
+        private String secret;
+
+        private Integer i;
+        private Long l;
+        private Short s;
+        private Byte b;
+        private Float f;
+        private Double d;
+        private Boolean bool;
+        private Character c;
+    }
+
+    @Test
+    void wrapperHeavyPojoTraversalDoesNotCreateExtraMetadata() {
+        List<EncryptedFieldMetadata> fields = cache.getEncryptedFields(TestWrapperHeavyEntity.class);
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).bsonFieldName()).isEqualTo("secret");
     }
 }
