@@ -1,6 +1,7 @@
 name: Performance Benchmark
 
 on:
+  pull_request:
   schedule:
     # Nightly at 2 AM UTC
     - cron: '0 2 * * *'
@@ -23,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
@@ -48,27 +51,68 @@ jobs:
       - name: Build benchmark JAR
         run: mvn package -Pbench -pl lcl-benchmarks -am -DskipTests -q
 
-      - name: Run benchmarks
+      - name: Run benchmarks (current)
         working-directory: lcl-benchmarks
         run: |
           mkdir -p results
-          java -jar target/benchmarks.jar -rf json -rff results/benchmark-results.json
+          java -jar target/benchmarks.jar -rf json -rff results/current-results.json
 
-      - name: Compare against baseline
+      - name: Resolve reference commit
+        id: reference
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REF_SHA="${{ github.event.pull_request.base.sha }}"
+            REF_LABEL="pull_request_base"
+          else
+            REF_SHA="$(git rev-parse HEAD^ 2>/dev/null || true)"
+            REF_LABEL="previous_commit"
+          fi
+
+          if [ -z "$REF_SHA" ]; then
+            echo "has_reference=false" >> "$GITHUB_OUTPUT"
+            echo "reference_label=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_reference=true" >> "$GITHUB_OUTPUT"
+          echo "reference_sha=$REF_SHA" >> "$GITHUB_OUTPUT"
+          echo "reference_label=$REF_LABEL" >> "$GITHUB_OUTPUT"
+
+      - name: Build and run benchmarks (reference)
+        if: steps.reference.outputs.has_reference == 'true'
+        shell: bash
+        run: |
+          rm -rf .benchmark-reference
+          git worktree add --detach .benchmark-reference "${{ steps.reference.outputs.reference_sha }}"
+          pushd .benchmark-reference >/dev/null
+          mvn package -Pbench -pl lcl-benchmarks -am -DskipTests -q
+          mkdir -p lcl-benchmarks/results
+          pushd lcl-benchmarks >/dev/null
+          java -jar target/benchmarks.jar -rf json -rff results/reference-results.json
+          popd >/dev/null
+          popd >/dev/null
+
+      - name: Compare against reference
         id: compare
+        if: steps.reference.outputs.has_reference == 'true'
         run: |
           THRESHOLD="${{ github.event.inputs.threshold || '10' }}"
           python scripts/compare-baseline.py \
-            lcl-benchmarks/results/benchmark-results.json \
-            lcl-benchmarks/baseline.json \
-            --threshold "$THRESHOLD"
+            lcl-benchmarks/results/current-results.json \
+            .benchmark-reference/lcl-benchmarks/results/reference-results.json \
+            --threshold "$THRESHOLD" \
+            --candidate-label current \
+            --reference-label "${{ steps.reference.outputs.reference_label }}"
 
       - name: Upload results artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-results
-          path: lcl-benchmarks/results/benchmark-results.json
+          path: |
+            lcl-benchmarks/results/current-results.json
+            .benchmark-reference/lcl-benchmarks/results/reference-results.json
           retention-days: 30
 
       - name: Summary
@@ -76,8 +120,14 @@ jobs:
         run: |
           echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f lcl-benchmarks/results/benchmark-results.json ]; then
+          if [ -f lcl-benchmarks/results/current-results.json ]; then
             echo "Results uploaded as artifact: **benchmark-results**" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Threshold: ${{ github.event.inputs.threshold || '10' }}%" >> $GITHUB_STEP_SUMMARY
+          echo "Reference: ${{ steps.reference.outputs.reference_label || 'none' }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup reference worktree
+        if: always() && steps.reference.outputs.has_reference == 'true'
+        shell: bash
+        run: git worktree remove --force .benchmark-reference

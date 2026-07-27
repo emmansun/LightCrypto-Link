@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Compare JMH benchmark results against a committed baseline.
+Compare JMH benchmark results against a reference run.
 
 Usage:
-    python compare-baseline.py <results.json> <baseline.json> [--threshold 10]
+    python compare-baseline.py <candidate.json> <reference.json> [--threshold 10]
 
 Exit codes:
     0 - No regression detected (all p95 within threshold)
@@ -78,37 +78,41 @@ def extract_p95(results: list) -> dict:
     return p95_map
 
 
-def compare(results_p95: dict, baseline_p95: dict, threshold: float) -> list:
+def compare(results_p95: dict, reference_p95: dict, threshold: float) -> list:
     """
     Compare results against baseline.
     
-    Returns list of regressions: (benchmark, baseline_p95, result_p95, pct_change)
+    Returns list of regressions: (benchmark, reference_p95, result_p95, pct_change)
     """
     regressions = []
     
     for bench, result_val in results_p95.items():
-        if bench not in baseline_p95:
-            print(f"WARNING: New benchmark '{bench}' not in baseline (skipping)")
+        if bench not in reference_p95:
+            print(f"WARNING: New benchmark '{bench}' not in reference results (skipping)")
             continue
         
-        baseline_val = baseline_p95[bench]
-        if baseline_val <= 0:
+        reference_val = reference_p95[bench]
+        if reference_val <= 0:
             continue
         
-        pct_change = ((result_val - baseline_val) / baseline_val) * 100
+        pct_change = ((result_val - reference_val) / reference_val) * 100
         
         if pct_change > threshold:
-            regressions.append((bench, baseline_val, result_val, pct_change))
+            regressions.append((bench, reference_val, result_val, pct_change))
     
     return regressions
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare JMH results against baseline")
-    parser.add_argument("results", help="Path to benchmark-results.json")
-    parser.add_argument("baseline", help="Path to baseline.json")
+    parser = argparse.ArgumentParser(description="Compare JMH results against a reference run")
+    parser.add_argument("results", help="Path to candidate benchmark results JSON")
+    parser.add_argument("baseline", help="Path to reference benchmark results JSON")
     parser.add_argument("--threshold", type=float, default=10.0,
                         help="Regression threshold percentage (default: 10)")
+    parser.add_argument("--candidate-label", default="candidate",
+                        help="Display label for the candidate results")
+    parser.add_argument("--reference-label", default="reference",
+                        help="Display label for the reference results")
     args = parser.parse_args()
 
     # Load files
@@ -127,7 +131,11 @@ def main():
         print("ERROR: No sample-mode benchmarks found in baseline", file=sys.stderr)
         sys.exit(2)
 
-    print(f"Comparing {len(results_p95)} benchmarks against baseline (threshold: {args.threshold}%)")
+    print(
+        f"Comparing {len(results_p95)} benchmarks: "
+        f"{args.candidate_label} vs {args.reference_label} "
+        f"(threshold: {args.threshold}%)"
+    )
     print("-" * 70)
 
     # Compare
@@ -145,7 +153,10 @@ def main():
             pct = ((result_val - baseline_val) / baseline_val) * 100
             status = "REGRESSED" if pct > args.threshold else "OK"
             symbol = "✗" if status == "REGRESSED" else "✓"
-            print(f"  {symbol} {bench}: {result_val:.3f}µs (baseline: {baseline_val:.3f}µs, {pct:+.1f}%) [{status}]")
+            print(
+                f"  {symbol} {bench}: {result_val:.3f}µs "
+                f"({args.reference_label}: {baseline_val:.3f}µs, {pct:+.1f}%) [{status}]"
+            )
 
     print("-" * 70)
 
