@@ -9,6 +9,7 @@ import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -68,6 +69,21 @@ public class AzureKeyVaultCmkAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(CmkProvider.class)
     public CmkProvider cmkProvider(AzureKeyVaultCmkProperties properties, KeyClient keyClient) {
+        return buildProvider(properties, keyClient);
+    }
+
+    /**
+     * Non-primary provider bean for cross-CMK migration scenarios.
+     * Created when another CmkProvider (e.g., LOCAL_SYMMETRIC) already exists,
+     * allowing the rewrap runner to resolve this provider as the migration target.
+     */
+    @Bean("azureKeyVaultCmkProvider")
+    @ConditionalOnBean(CmkProvider.class)
+    public CmkProvider azureKeyVaultMigrationCmkProvider(AzureKeyVaultCmkProperties properties, KeyClient keyClient) {
+        return buildProvider(properties, keyClient);
+    }
+
+    private CmkProvider buildProvider(AzureKeyVaultCmkProperties properties, KeyClient keyClient) {
         if (properties.getKeyName() == null || properties.getKeyName().isBlank()) {
             throw new IllegalArgumentException("lcl.crypto.azure.key-name must not be null or blank");
         }

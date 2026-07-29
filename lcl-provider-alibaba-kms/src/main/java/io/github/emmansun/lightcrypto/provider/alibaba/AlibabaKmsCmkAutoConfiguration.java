@@ -3,6 +3,7 @@ package io.github.emmansun.lightcrypto.provider.alibaba;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -49,6 +50,23 @@ public class AlibabaKmsCmkAutoConfiguration {
     @ConditionalOnMissingBean(CmkProvider.class)
     public CmkProvider cmkProvider(AlibabaKmsCmkProperties properties,
                                    com.aliyun.kms20160120.Client kmsClient) {
+        return buildProvider(properties, kmsClient);
+    }
+
+    /**
+     * Non-primary provider bean for cross-CMK migration scenarios.
+     * Created when another CmkProvider (e.g., LOCAL_SYMMETRIC) already exists,
+     * allowing the rewrap runner to resolve this provider as the migration target.
+     */
+    @Bean("alibabaKmsCmkProvider")
+    @ConditionalOnBean(CmkProvider.class)
+    public CmkProvider alibabaKmsMigrationCmkProvider(AlibabaKmsCmkProperties properties,
+                                                     com.aliyun.kms20160120.Client kmsClient) {
+        return buildProvider(properties, kmsClient);
+    }
+
+    private CmkProvider buildProvider(AlibabaKmsCmkProperties properties,
+                                      com.aliyun.kms20160120.Client kmsClient) {
         if (properties.getMode() == AlibabaKmsCmkProperties.Mode.SYMMETRIC) {
             log.info("Alibaba KMS CMK provider initialized in SYMMETRIC mode: keyId={}", properties.getKeyId());
             return createSymmetricProvider(properties, kmsClient);

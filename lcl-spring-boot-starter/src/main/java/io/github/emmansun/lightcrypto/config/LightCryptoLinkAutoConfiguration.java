@@ -1,12 +1,18 @@
 package io.github.emmansun.lightcrypto.config;
 
+import io.github.emmansun.lightcrypto.core.event.EventBus;
+import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.exception.ConfigurationException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
+import io.github.emmansun.lightcrypto.migration.CmkProviderRewrapRunner;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
 import io.github.emmansun.lightcrypto.provider.LocalSymmetricCmkProvider;
+import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.TypeDeserializer;
 import io.github.emmansun.lightcrypto.service.TypeSerializer;
+import io.github.emmansun.lightcrypto.spi.VaultStore;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -41,7 +47,8 @@ import java.util.List;
         KeyVaultProperties.class,
         KmsProperties.class,
         TenantProperties.class,
-        ObservabilityProperties.class
+        ObservabilityProperties.class,
+        RewrapProperties.class
 })
 public class LightCryptoLinkAutoConfiguration {
 
@@ -81,6 +88,22 @@ public class LightCryptoLinkAutoConfiguration {
     @Bean
     public Validator lightCryptoConfigurationValidator() {
         return new ConfigurationValidator();
+    }
+
+    // ===== Migration =====
+
+    @Bean
+    @ConditionalOnProperty(prefix = "lightcrypto.migration.rewrap", name = "enabled", havingValue = "true")
+    @ConditionalOnBean({KeyVaultService.class, VaultStore.class})
+    public CmkProviderRewrapRunner cmkProviderRewrapRunner(
+            KeyVaultService keyVaultService,
+            VaultStore vaultStore,
+            List<CmkProvider> cmkProviders,
+            RewrapProperties rewrapProperties,
+            org.springframework.beans.factory.ObjectProvider<EventBus> eventBusProvider,
+            org.springframework.context.ApplicationContext applicationContext) {
+        EventBus eventBus = eventBusProvider.getIfAvailable(() -> NoOpEventBus.INSTANCE);
+        return new CmkProviderRewrapRunner(keyVaultService, vaultStore, cmkProviders, rewrapProperties, eventBus, applicationContext);
     }
 
     // ===== Key resolution =====

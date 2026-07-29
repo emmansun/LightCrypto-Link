@@ -248,6 +248,182 @@ public class KeyVaultService {
         }
     }
 
+    /**
+     * Re-wrap all key entries in the specified namespace under a new CMK provider.
+     * <p>
+     * This operation unwraps all entries (ACTIVE + ROTATED) with the current provider,
+     * verifies KCV/binding invariance, re-wraps with the target provider, performs
+     * post-rewrap roundtrip verification, and persists atomically with optimistic locking.
+     * </p>
+     *
+     * @param namespace the canonical namespace to re-wrap
+     * @param targetProvider the target CMK provider to re-wrap keys under
+     * @return the result of the re-wrap operation
+     */
+    public RewrapResult rewrapVault(String namespace, CmkProvider targetProvider) {
+        long startNanos = System.nanoTime();
+        try {
+            synchronized (this) {
+                Optional<VaultDocument> optDoc = vaultStore.load(namespace);
+                if (optDoc.isEmpty()) {
+                    throw new FatalCryptoException("Vault not found for namespace: " + namespace);
+                }
+
+                VaultDocument doc = optDoc.get();
+
+                // Skip if same provider AND same key (both providerId and publicReference match)
+                if (targetProvider.getProviderId().equals(doc.cmkProvider())
+                        && targetProvider.getPublicReference().equals(doc.cmkId())) {
+                    long durationMicros = (System.nanoTime() - startNanos) / 1_000;
+                    return RewrapResult.success(namespace, doc.keys().size(), durationMicros);
+                }
+
+                long expectedVersion = doc.version();
+                List<KeyEntry> rewrappedKeys = new ArrayList<>();
+
+                for (KeyEntry entry : doc.keys()) {
+                    // Unwrap with current provider
+                    byte[] rawDek = cmkProvider.unwrap(new WrappedKey(entry.wrappedDek(), entry.wrappingAlgorithm()));
+                    byte[] rawHmac = cmkProvider.unwrap(new WrappedKey(entry.wrappedHmac(), entry.wrappingAlgorithm()));
+
+                    // Verify KCV/binding invariance
+                    String computedDekKcv = KeyCheckValue.computeDekKcv(rawDek, KCV_ALGORITHM);
+                    if (!computedDekKcv.equals(entry.dekKcv())) {
+                        throw new FatalCryptoException(
+                                "DEK KCV mismatch for kid " + entry.kid() + " during re-wrap! Vault integrity compromised.");
+                    }
+                    String computedHmacKcv = KeyCheckValue.computeHmacKcv(rawHmac);
+                    if (!computedHmacKcv.equals(entry.hmacKcv())) {
+                        throw new FatalCryptoException(
+                                "HMAC KCV mismatch for kid " + entry.kid() + " during re-wrap! Vault integrity compromised.");
+                    }
+                    String computedBinding = KeyCheckValue.computeBinding(rawHmac, rawDek);
+                    if (!computedBinding.equals(entry.binding())) {
+                        throw new FatalCryptoException(
+                                "Key binding mismatch for kid " + entry.kid() + " during re-wrap! DEK/HMAC key pair corrupted.");
+                    }
+
+                    // Re-wrap with target provider
+                    WrappedKey newWrappedDek = targetProvider.wrap(rawDek);
+                    WrappedKey newWrappedHmac = targetProvider.wrap(rawHmac);
+
+                    // Post-rewrap roundtrip verification
+                    byte[] verifyDek = targetProvider.unwrap(newWrappedDek);
+                    byte[] verifyHmac = targetProvider.unwrap(newWrappedHmac);
+                    if (!Arrays.equals(rawDek, verifyDek) || !Arrays.equals(rawHmac, verifyHmac)) {
+                        throw new FatalCryptoException(
+                                "Post-rewrap roundtrip verification failed for kid " + entry.kid()
+                                        + " with target provider " + targetProvider.getProviderId());
+                    }
+
+                    rewrappedKeys.add(new KeyEntry(
+                            entry.kid(), entry.status(),
+                            newWrappedDek.ciphertext(), newWrappedHmac.ciphertext(),
+                            newWrappedDek.algorithm(),
+                            entry.dekKcv(), entry.hmacKcv(), entry.binding(), entry.createdAt()));
+
+                    // Securely clear raw key material
+                    Arrays.fill(rawDek, (byte) 0);
+                    Arrays.fill(rawHmac, (byte) 0);
+                    Arrays.fill(verifyDek, (byte) 0);
+                    Arrays.fill(verifyHmac, (byte) 0);
+                }
+
+                // Build updated document
+                VaultDocument updatedDoc = new VaultDocument(
+                        namespace,
+                        rewrappedKeys,
+                        doc.activeKid(),
+                        expectedVersion + 1,
+                        targetProvider.getProviderId(),
+                        targetProvider.getPublicReference(),
+                        doc.createdAt(),
+                        Instant.now());
+
+                // Persist with optimistic locking
+                try {
+                    vaultStore.rotate(updatedDoc);
+                } catch (OptimisticLockException e) {
+                    throw new FatalCryptoException(
+                            "Concurrent modification detected during re-wrap for namespace: " + namespace + ". Please retry.", e);
+                }
+
+                // Evict DEK cache entry
+                NamespaceKeyContext evicted = namespaceKeyContexts.remove(namespace);
+                if (evicted != null) {
+                    destroyKeyMaterial(evicted);
+                }
+
+                long durationMicros = (System.nanoTime() - startNanos) / 1_000;
+
+                eventBus.emit(LclEvent.builder()
+                        .event("lcl.rewrap.namespace.completed")
+                        .tier(EventTier.L2)
+                        .result("success")
+                        .namespace(namespace)
+                        .durationMicros(durationMicros)
+                        .attribute("targetProviderId", targetProvider.getProviderId())
+                        .attribute("keyCount", String.valueOf(rewrappedKeys.size()))
+                        .build());
+
+                return RewrapResult.success(namespace, rewrappedKeys.size(), durationMicros);
+            }
+        } catch (Exception e) {
+            long durationMicros = (System.nanoTime() - startNanos) / 1_000;
+            eventBus.emit(LclEvent.builder()
+                    .event("lcl.rewrap.namespace.failed")
+                    .tier(EventTier.L2)
+                    .result("failure")
+                    .namespace(namespace)
+                    .durationMicros(durationMicros)
+                    .errorType(e.getClass().getSimpleName())
+                    .build());
+            if (e instanceof FatalCryptoException fce) {
+                throw fce;
+            }
+            throw new FatalCryptoException("Re-wrap failed for namespace: " + namespace, e);
+        }
+    }
+
+    /**
+     * Re-wrap all vaults under a new CMK provider with per-namespace error isolation.
+     *
+     * @param targetProvider the target CMK provider
+     * @return list of results for each namespace
+     */
+    public List<RewrapResult> rewrapAllVaults(CmkProvider targetProvider) {
+        long batchStartNanos = System.nanoTime();
+        List<VaultDocument> allDocs = vaultStore.loadAll();
+        List<RewrapResult> results = new ArrayList<>();
+
+        for (VaultDocument doc : allDocs) {
+            try {
+                RewrapResult result = rewrapVault(doc.namespace(), targetProvider);
+                results.add(result);
+            } catch (Exception e) {
+                long durationMicros = (System.nanoTime() - batchStartNanos) / 1_000;
+                results.add(RewrapResult.failure(doc.namespace(), e.getMessage(), durationMicros));
+                log.error("Re-wrap failed for namespace: {}", doc.namespace(), e);
+            }
+        }
+
+        long totalDurationMicros = (System.nanoTime() - batchStartNanos) / 1_000;
+        long successCount = results.stream().filter(RewrapResult::success).count();
+        long failedCount = results.size() - successCount;
+
+        eventBus.emit(LclEvent.builder()
+                .event("lcl.rewrap.batch.completed")
+                .tier(EventTier.L2)
+                .result(failedCount == 0 ? "success" : "partial")
+                .durationMicros(totalDurationMicros)
+                .attribute("totalCount", String.valueOf(results.size()))
+                .attribute("successCount", String.valueOf(successCount))
+                .attribute("failedCount", String.valueOf(failedCount))
+                .build());
+
+        return results;
+    }
+
     // ===== Internal methods =====
 
     private void initForNamespace(String namespace) {

@@ -25,6 +25,8 @@ This document contains the full configuration reference for LCL.
 
 ## KMS Providers (`lightcrypto.kms.*`)
 
+This configuration controls the **built-in LOCAL_SYMMETRIC** CMK provider only. Cloud KMS providers (Azure, Alibaba) are configured via their own module-specific prefixes (see below).
+
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `providers` | `List<ProviderEntry>` | empty | List of CMK provider entries |
@@ -33,11 +35,26 @@ Each `ProviderEntry`:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `id` | `String` | yes | Unique provider identifier (used in vault metadata) |
+| `id` | `String` | yes | Unique entry identifier (for validation only; vault metadata uses `CmkProvider.getProviderId()`) |
 | `type` | `ProviderType` | yes | `LOCAL_SYMMETRIC`, `ALIYUN`, or `AZURE` |
 | `key-hex` | `String` | conditional | 64-char hex string (32 bytes) — required for `LOCAL_SYMMETRIC` |
 | `key-hex-file` | `String` | conditional | Path to a UTF-8 file containing the hex key (alternative to `key-hex`) |
 | `config` | `Map<String,String>` | no | Provider-specific settings (reserved for future use) |
+
+### Provider Selection Logic
+
+The starter scans `providers` for a `LOCAL_SYMMETRIC` entry and creates the primary `CmkProvider` bean. Cloud KMS modules (`lcl-provider-azure-kms`, `lcl-provider-alibaba-kms`) register their own providers independently:
+
+| Setup | Config needed | Resulting CmkProvider |
+|---|---|---|
+| Local development | `lightcrypto.kms.providers[0].type=LOCAL_SYMMETRIC` | `LocalSymmetricCmkProvider` (primary) |
+| Alibaba Cloud only | `lcl.crypto.alibaba.key-id=...` (no LOCAL entry) | `AlibabaKmsCmkProvider` (primary) |
+| Azure only | `lcl.crypto.azure.key-name=...` (no LOCAL entry) | `AzureKeyVaultCmkProvider` (primary) |
+| LOCAL + Cloud (migration) | Both configured | LOCAL = primary, Cloud = non-primary (for rewrap) |
+
+> **Note**: The `ALIYUN` and `AZURE` type values in the enum are reserved for future unified configuration. Currently, cloud providers are activated by their module-specific prefixes (`lcl.crypto.alibaba.*` / `lcl.crypto.azure.*`), not by entries in this list.
+
+See [Cross-CMK Provider Migration](migration/cross-cmk-provider-migration.md) for multi-provider migration scenarios.
 
 ## Tenant (`lightcrypto.tenants.*`)
 
@@ -278,6 +295,40 @@ LCL validates configuration at startup using JSR-380 (Bean Validation):
 - Provider `id` values must be unique across the list.
 
 Invalid configuration causes the application to fail fast at startup.
+
+## Migration — Cross-CMK Re-wrap (`lightcrypto.migration.rewrap.*`)
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `false` | Activates the `CmkProviderRewrapRunner` at startup |
+| `dry-run` | `boolean` | `true` | Validation-only mode: loads vaults, verifies target provider roundtrip, logs planned actions — no mutation |
+| `target-provider-id` | `String` | — | The `getProviderId()` of the target CMK provider |
+| `target-public-reference` | `String` | — | Optional: `getPublicReference()` for disambiguation when multiple providers share the same providerId |
+| `target-bean-name` | `String` | — | Optional: Spring bean name of the target CmkProvider (highest priority) |
+
+Target resolution priority: `target-bean-name` > `target-provider-id` + `target-public-reference` > `target-provider-id` alone.
+
+### Example
+
+```yaml
+# Cross-type migration (LOCAL → Azure)
+lightcrypto:
+  migration:
+    rewrap:
+      enabled: true
+      dry-run: true
+      target-provider-id: azure-keyvault
+
+# Same-type key rotation (bean name resolution)
+lightcrypto:
+  migration:
+    rewrap:
+      enabled: true
+      dry-run: true
+      target-bean-name: newLocalCmkProvider
+```
+
+See [Cross-CMK Provider Migration](migration/cross-cmk-provider-migration.md) for the full procedure.
 
 ## Security Guidance
 

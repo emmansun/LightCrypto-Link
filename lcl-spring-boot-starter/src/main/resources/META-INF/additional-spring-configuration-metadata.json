@@ -1,0 +1,31 @@
+{
+  "properties": [
+    {
+      "name": "lightcrypto.migration.rewrap.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Whether the cross-CMK provider re-wrap runner is enabled at startup.",
+      "defaultValue": false
+    },
+    {
+      "name": "lightcrypto.migration.rewrap.dry-run",
+      "type": "java.lang.Boolean",
+      "description": "Whether to run in dry-run mode (validation only, no vault mutation).",
+      "defaultValue": true
+    },
+    {
+      "name": "lightcrypto.migration.rewrap.target-provider-id",
+      "type": "java.lang.String",
+      "description": "The getProviderId() of the target CMK provider to re-wrap vault keys under."
+    },
+    {
+      "name": "lightcrypto.migration.rewrap.target-public-reference",
+      "type": "java.lang.String",
+      "description": "Optional: getPublicReference() of the target provider for disambiguation when multiple providers share the same providerId."
+    },
+    {
+      "name": "lightcrypto.migration.rewrap.target-bean-name",
+      "type": "java.lang.String",
+      "description": "Optional: Spring bean name of the target CmkProvider. Takes highest priority over providerId/publicReference matching."
+    }
+  ]
+}

@@ -17,6 +17,7 @@
             <Class name="io.github.emmansun.lightcrypto.observability.LclHealthIndicator"/>
             <Class name="io.github.emmansun.lightcrypto.diagnostics.LclBootstrapRunner"/>
             <Class name="io.github.emmansun.lightcrypto.diagnostics.LclKatEndpoint"/>
+            <Class name="io.github.emmansun.lightcrypto.migration.CmkProviderRewrapRunner"/>
         </Or>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
