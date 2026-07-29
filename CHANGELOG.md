@@ -4,7 +4,7 @@ All notable changes to LightCrypto-Link are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] — 2026-07-29
 
 ### Added
 
@@ -89,4 +89,5 @@ LightCrypto-Link/
 - Micrometer (optional, metrics)
 - Spring Boot Actuator (optional, health + diagnostics endpoints)
 
+[1.1.0]: https://github.com/emmansun/LightCrypto-Link/releases/tag/v1.1.0
 [1.0.0]: https://github.com/emmansun/LightCrypto-Link/releases/tag/v1.0.0
