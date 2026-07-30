@@ -96,7 +96,7 @@ public class AzureKeyVaultCmkAutoConfiguration {
         log.info("Azure Key Vault CMK provider initialized: keyName={}, keyVersion={}, algorithm={}",
                 properties.getKeyName(), keyVersion, properties.getAlgorithm());
 
-        return new AzureKeyVaultCmkProvider(publicKey, keyClient, ALGORITHM_RSA, properties.getKeyName(), keyVersion);
+        return new AzureKeyVaultCmkProvider(publicKey, keyClient, ALGORITHM_RSA, properties.getKeyName(), keyVersion, keyClient.getVaultUrl());
     }
 
     private void validateCredentials(AzureKeyVaultCmkProperties properties) {

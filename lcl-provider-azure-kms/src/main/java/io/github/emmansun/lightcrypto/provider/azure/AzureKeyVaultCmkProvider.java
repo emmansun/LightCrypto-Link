@@ -32,6 +32,7 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
     private final String algorithm;
     private final String keyName;
     private final String keyVersion;
+    private final String vaultUrl;
     private final KeyUnwrapper keyUnwrapper;
 
     /**
@@ -40,6 +41,7 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
      * @param publicKey    RSA public key for local wrap (from PEM or auto-fetched via getKey())
      * @param keyClient Azure Key Vault KeyClient for unwrap
      * @param algorithm    wrap algorithm identifier (e.g. "RSA-OAEP-256")
+     * @param keyName      key name in the vault
      * @param keyVersion   key version auto-resolved from getKey()
      */
     public AzureKeyVaultCmkProvider(PublicKey publicKey,
@@ -47,7 +49,26 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
                                     String algorithm,
                                     String keyName,
                                     String keyVersion) {
-        this(publicKey, keyClient, algorithm, keyName, keyVersion,
+        this(publicKey, keyClient, algorithm, keyName, keyVersion, null);
+    }
+
+    /**
+     * Constructs a new Azure Key Vault asymmetric CMK provider with vault URL.
+     *
+     * @param publicKey    RSA public key for local wrap (from PEM or auto-fetched via getKey())
+     * @param keyClient    Azure Key Vault KeyClient for unwrap
+     * @param algorithm    wrap algorithm identifier (e.g. "RSA-OAEP-256")
+     * @param keyName      key name in the vault
+     * @param keyVersion   key version auto-resolved from getKey()
+     * @param vaultUrl     vault URL for globally unique public reference (nullable)
+     */
+    public AzureKeyVaultCmkProvider(PublicKey publicKey,
+                                    KeyClient keyClient,
+                                    String algorithm,
+                                    String keyName,
+                                    String keyVersion,
+                                    String vaultUrl) {
+        this(publicKey, keyClient, algorithm, keyName, keyVersion, vaultUrl,
                 (resolvedKeyName, resolvedKeyVersion, ciphertext) -> {
                     CryptographyClient cryptoClient = keyClient.getCryptographyClient(resolvedKeyName, resolvedKeyVersion);
                     UnwrapResult result = cryptoClient.unwrapKey(KeyWrapAlgorithm.RSA_OAEP_256, ciphertext);
@@ -60,6 +81,7 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
                              String algorithm,
                              String keyName,
                              String keyVersion,
+                             String vaultUrl,
                              KeyUnwrapper keyUnwrapper) {
         if (publicKey == null) {
             throw new IllegalArgumentException("publicKey must not be null");
@@ -71,6 +93,7 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
         this.algorithm = algorithm;
         this.keyName = keyName;
         this.keyVersion = keyVersion;
+        this.vaultUrl = vaultUrl;
         this.keyUnwrapper = keyUnwrapper;
     }
 
@@ -115,8 +138,16 @@ public final class AzureKeyVaultCmkProvider implements CmkProvider {
         return PROVIDER_ID;
     }
 
+    /**
+     * Returns a globally unique reference: {@code {vaultUrl}/keys/{keyName}} when vaultUrl is
+     * configured, or just {@code {keyName}} as fallback. Including the vault URL prevents
+     * same-provider skip false-positives when different vault instances share a key name.
+     */
     @Override
     public String getPublicReference() {
+        if (vaultUrl != null && !vaultUrl.isBlank()) {
+            return vaultUrl + "/keys/" + keyName;
+        }
         return keyName;
     }
 

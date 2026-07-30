@@ -131,6 +131,7 @@ class AzureKeyVaultCmkProviderTest {
                 "RSA-OAEP-256",
                 "test-name",
                 "provider-version",
+                null,
                 (keyName, keyVersion, wrappedCiphertext) -> {
                     usedVersion.set(keyVersion);
                     assertThat(keyName).isEqualTo("test-name");
@@ -161,6 +162,7 @@ class AzureKeyVaultCmkProviderTest {
                 "RSA-OAEP-256",
                 "test-name",
                 "provider-version",
+                null,
                 (keyName, keyVersion, wrappedCiphertext) -> {
                     usedVersion.set(keyVersion);
                     assertThat(keyName).isEqualTo("test-name");
@@ -189,6 +191,7 @@ class AzureKeyVaultCmkProviderTest {
                 "RSA-OAEP-256",
                 "test-name",
                 "provider-version",
+                null,
                 (keyName, keyVersion, wrappedCiphertext) -> {
                     throw new RuntimeException("boom");
                 });
@@ -274,6 +277,25 @@ class AzureKeyVaultCmkProviderTest {
         assertThatThrownBy(() -> PublicKeyLoader.loadFromPem(rsaPublicKeyPem, "DES"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unsupported algorithm");
+    }
+
+    @Test
+    void publicReference_includesVaultUrlWhenConfigured() {
+        KeyClient dummyClient = createDummyClient();
+        AzureKeyVaultCmkProvider provider = new AzureKeyVaultCmkProvider(
+                rsaKeyPair.getPublic(), dummyClient, "RSA-OAEP-256",
+                "my-key", "v1", "https://myvault.vault.azure.net");
+        assertThat(provider.getPublicReference())
+                .isEqualTo("https://myvault.vault.azure.net/keys/my-key");
+    }
+
+    @Test
+    void publicReference_fallsBackToKeyNameWhenVaultUrlNull() {
+        KeyClient dummyClient = createDummyClient();
+        AzureKeyVaultCmkProvider provider = new AzureKeyVaultCmkProvider(
+                rsaKeyPair.getPublic(), dummyClient, "RSA-OAEP-256",
+                "my-key", "v1", null);
+        assertThat(provider.getPublicReference()).isEqualTo("my-key");
     }
 
     // ===== Helper methods =====
