@@ -53,4 +53,4 @@
 
 - [x] 7.1 Run SpotBugs: `mvn -pl lcl-spring-boot-starter spotbugs:check`
 - [x] 7.2 Run full build: `mvn clean verify`
-- [ ] 7.3 Commit with structured message
+- [x] 7.3 Commit with structured message

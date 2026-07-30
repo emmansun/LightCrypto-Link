@@ -5,6 +5,8 @@ import io.github.emmansun.lightcrypto.config.CryptographyProperties;
 import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.config.TenantProperties;
 import io.github.emmansun.lightcrypto.core.CryptoCodec;
+import io.github.emmansun.lightcrypto.core.event.EventBus;
+import io.github.emmansun.lightcrypto.core.event.LclEvent;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
@@ -29,6 +31,7 @@ class DekReEncryptionServiceTest {
 
     private static final AlgorithmId KCV_ALGORITHM = AlgorithmId.AES_256_GCM;
     private static final String TEST_NAMESPACE = "default.default.TestUser#email";
+    private static final String PHONE_NAMESPACE = "default.default.TestUserWithBlindIndex#phone";
 
     private InMemoryVaultStore vaultStore;
     private InMemoryDocumentRewriteStore rewriteStore;
@@ -56,6 +59,12 @@ class DekReEncryptionServiceTest {
         KeyEntry v2 = activeEntry("v2-bbbbbbbb", dekV2, hmacV2);
         VaultDocument doc = vaultDoc(TEST_NAMESPACE, "v2-bbbbbbbb", List.of(v1, v2));
         vaultStore.save(doc);
+
+        // Setup vault for blind index entity (same keys, different namespace)
+        VaultDocument phoneDoc = vaultDoc(PHONE_NAMESPACE, "v2-bbbbbbbb", List.of(
+                rotatedEntry("v1-aaaaaaaa", dekV1, hmacV1),
+                activeEntry("v2-bbbbbbbb", dekV2, hmacV2)));
+        vaultStore.save(phoneDoc);
 
         keyVaultService = new KeyVaultService(vaultStore, new IdentityCmkProvider(), (KeyVaultProperties) null);
         keyVaultService.ensureVaultInitialized(TEST_NAMESPACE);
@@ -175,11 +184,243 @@ class DekReEncryptionServiceTest {
         assertThat(rewriteStore.getReplaceCalls()).isZero();
     }
 
-    // ===== Test entity =====
+    @Test
+    void reEncryptWithBlindIndexRecomputesIndex() {
+        // Entity with blindIndex=true
+        String blob = CryptoCodec.encrypt(dekV1, "13800001111".getBytes(),
+                AlgorithmId.AES_256_GCM, Namespace.parse(PHONE_NAMESPACE), 1);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("phone", Map.of("c", blob, "_e", 1, "_t", "STR", "b", "old-blind-index"));
+        fields.put("_collection", "testUserBi");
+
+        RawDocument doc = new RawDocument("doc-bi", fields, null);
+        rewriteStore.addDocument(doc);
+
+        ReEncryptOptions options = ReEncryptOptions.forEntity(TestUserWithBlindIndex.class);
+        ReEncryptResult result = service.reEncrypt(TestUserWithBlindIndex.class, options);
+
+        assertThat(result.docsProcessed()).isEqualTo(1);
+        assertThat(result.fieldsReEncrypted()).isEqualTo(1);
+
+        // Verify the payload was rebuilt with a new blind index (not the old one)
+        RawDocument replaced = rewriteStore.getLastReplacedDoc();
+        assertThat(replaced).isNotNull();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) replaced.fields().get("phone");
+        assertThat(payload.get("b")).isNotNull();
+        assertThat(payload.get("b")).isNotEqualTo("old-blind-index");
+    }
+
+    @Test
+    void reEncryptMultipleBatchesWithCheckpointInterval() {
+        // Create 7 documents with batchSize=3, checkpointInterval=2
+        for (int i = 0; i < 7; i++) {
+            String blob = CryptoCodec.encrypt(dekV1, ("user" + i + "@test.com").getBytes(),
+                    AlgorithmId.AES_256_GCM, Namespace.parse(TEST_NAMESPACE), 1);
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
+            fields.put("_collection", "testUser");
+            rewriteStore.addDocument(new RawDocument("doc-" + i, fields, null));
+        }
+
+        ReEncryptOptions options = new ReEncryptOptions(TestUser.class, 3, "batch-task", false, 2);
+        ReEncryptResult result = service.reEncrypt(TestUser.class, options);
+
+        assertThat(result.docsProcessed()).isEqualTo(7);
+        assertThat(result.fieldsReEncrypted()).isEqualTo(7);
+        assertThat(result.success()).isTrue();
+        assertThat(result.totalDocsScanned()).isEqualTo(7);
+
+        // Checkpoint should be saved (at batch 2 and final)
+        Optional<String> checkpoint = rewriteStore.loadCheckpoint("batch-task");
+        assertThat(checkpoint).isPresent();
+    }
+
+    @Test
+    void reEncryptHandlesDocumentException() {
+        // First doc: valid old version
+        String validBlob = CryptoCodec.encrypt(dekV1, "valid@test.com".getBytes(),
+                AlgorithmId.AES_256_GCM, Namespace.parse(TEST_NAMESPACE), 1);
+        Map<String, Object> validFields = new LinkedHashMap<>();
+        validFields.put("email", Map.of("c", validBlob, "_e", 1, "_t", "STR"));
+        validFields.put("_collection", "testUser");
+        rewriteStore.addDocument(new RawDocument("doc-valid", validFields, null));
+
+        // Second doc: valid wire format but encrypted with WRONG key (GCM auth will fail)
+        byte[] wrongDek = fixedKey((byte) 0x99);
+        String badBlob = CryptoCodec.encrypt(wrongDek, "bad@test.com".getBytes(),
+                AlgorithmId.AES_256_GCM, Namespace.parse(TEST_NAMESPACE), 1);
+        Map<String, Object> corruptFields = new LinkedHashMap<>();
+        corruptFields.put("email", Map.of("c", badBlob, "_e", 1, "_t", "STR"));
+        corruptFields.put("_collection", "testUser");
+        rewriteStore.addDocument(new RawDocument("doc-corrupt", corruptFields, null));
+
+        ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
+        ReEncryptResult result = service.reEncrypt(TestUser.class, options);
+
+        // One processed, one failed
+        assertThat(result.docsProcessed()).isEqualTo(1);
+        assertThat(result.docsFailed()).isEqualTo(1);
+        assertThat(result.success()).isFalse();
+        assertThat(result.totalDocsScanned()).isEqualTo(2);
+    }
+
+    @Test
+    void reEncryptSkipsNullAndNonEncryptedFields() {
+        // Document with null email and a non-encrypted payload
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("email", null);
+        fields.put("_collection", "testUser");
+        rewriteStore.addDocument(new RawDocument("doc-null", fields, null));
+
+        // Document with non-encrypted field (plain string, not a payload map)
+        Map<String, Object> fields2 = new LinkedHashMap<>();
+        fields2.put("email", "plain-text-not-encrypted");
+        fields2.put("_collection", "testUser");
+        rewriteStore.addDocument(new RawDocument("doc-plain", fields2, null));
+
+        ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
+        ReEncryptResult result = service.reEncrypt(TestUser.class, options);
+
+        // Both docs skipped (no encrypted payloads found)
+        assertThat(result.docsSkipped()).isEqualTo(2);
+        assertThat(result.docsProcessed()).isZero();
+    }
+
+    @Test
+    void reEncryptSkipsInvalidWireFormat() {
+        // Document with invalid base64url blob
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("email", Map.of("c", "not-valid-base64url!!!", "_e", 1, "_t", "STR"));
+        fields.put("_collection", "testUser");
+        rewriteStore.addDocument(new RawDocument("doc-invalid", fields, null));
+
+        ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
+        ReEncryptResult result = service.reEncrypt(TestUser.class, options);
+
+        // Skipped because wire format decode fails gracefully
+        assertThat(result.docsSkipped()).isEqualTo(1);
+        assertThat(result.docsFailed()).isZero();
+    }
+
+    @Test
+    void reEncryptAllReturnsEmptyPlaceholder() {
+        ReEncryptOptions options = ReEncryptOptions.forAll();
+        List<ReEncryptResult> results = service.reEncryptAll(options);
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void reEncryptEntityWithNoEncryptedFields() {
+        ReEncryptOptions options = ReEncryptOptions.forEntity(PlainEntity.class);
+        ReEncryptResult result = service.reEncrypt(PlainEntity.class, options);
+
+        assertThat(result.namespace()).isEqualTo("none");
+        assertThat(result.totalDocsScanned()).isZero();
+    }
+
+    @Test
+    void reEncryptEmitsEventsToEventBus() {
+        List<LclEvent> capturedEvents = new ArrayList<>();
+        EventBus capturingBus = capturedEvents::add;
+
+        DekReEncryptionService serviceWithBus = new DekReEncryptionService(
+                metadataCache, keyVaultService, new TestStorageAdapter(),
+                rewriteStore, new TypeSerializer(), capturingBus);
+
+        String blob = CryptoCodec.encrypt(dekV1, "event@test.com".getBytes(),
+                AlgorithmId.AES_256_GCM, Namespace.parse(TEST_NAMESPACE), 1);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
+        fields.put("_collection", "testUser");
+        rewriteStore.addDocument(new RawDocument("doc-evt", fields, null));
+
+        ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class).withBatchSize(1);
+        serviceWithBus.reEncrypt(TestUser.class, options);
+
+        // Should emit batch event + completion event
+        assertThat(capturedEvents).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(capturedEvents.stream().map(LclEvent::event))
+                .contains("lcl.reencrypt.batch.completed", "lcl.reencrypt.namespace.completed");
+
+        LclEvent completion = capturedEvents.stream()
+                .filter(e -> e.event().equals("lcl.reencrypt.namespace.completed"))
+                .findFirst().orElseThrow();
+        assertThat(completion.result()).isEqualTo("success");
+        assertThat(completion.namespace()).isEqualTo(TEST_NAMESPACE);
+    }
+
+    @Test
+    void reEncryptEmitsPartialResultOnFailure() {
+        List<LclEvent> capturedEvents = new ArrayList<>();
+        EventBus capturingBus = capturedEvents::add;
+
+        DekReEncryptionService serviceWithBus = new DekReEncryptionService(
+                metadataCache, keyVaultService, new TestStorageAdapter(),
+                rewriteStore, new TypeSerializer(), capturingBus);
+
+        // Valid wire format but wrong key → GCM auth failure
+        byte[] wrongDek = fixedKey((byte) 0x99);
+        String badBlob = CryptoCodec.encrypt(wrongDek, "fail@test.com".getBytes(),
+                AlgorithmId.AES_256_GCM, Namespace.parse(TEST_NAMESPACE), 1);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("email", Map.of("c", badBlob, "_e", 1, "_t", "STR"));
+        fields.put("_collection", "testUser");
+        rewriteStore.addDocument(new RawDocument("doc-fail", fields, null));
+
+        ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
+        serviceWithBus.reEncrypt(TestUser.class, options);
+
+        LclEvent completion = capturedEvents.stream()
+                .filter(e -> e.event().equals("lcl.reencrypt.namespace.completed"))
+                .findFirst().orElseThrow();
+        assertThat(completion.result()).isEqualTo("partial");
+    }
+
+    @Test
+    void reEncryptOptionsHelperMethods() {
+        ReEncryptOptions base = ReEncryptOptions.forEntity(TestUser.class);
+        assertThat(base.entityClass()).isEqualTo(TestUser.class);
+        assertThat(base.batchSize()).isEqualTo(ReEncryptOptions.DEFAULT_BATCH_SIZE);
+        assertThat(base.dryRun()).isFalse();
+        assertThat(base.taskId()).isNull();
+        assertThat(base.checkpointInterval()).isEqualTo(ReEncryptOptions.DEFAULT_CHECKPOINT_INTERVAL);
+
+        ReEncryptOptions modified = base.withBatchSize(100).withTaskId("my-task").withDryRun(true);
+        assertThat(modified.batchSize()).isEqualTo(100);
+        assertThat(modified.taskId()).isEqualTo("my-task");
+        assertThat(modified.dryRun()).isTrue();
+        assertThat(modified.entityClass()).isEqualTo(TestUser.class);
+
+        ReEncryptOptions all = ReEncryptOptions.forAll();
+        assertThat(all.entityClass()).isNull();
+    }
+
+    @Test
+    void reEncryptResultHelperMethods() {
+        ReEncryptResult success = new ReEncryptResult("ns", 10, 2, 0, 10, 5000);
+        assertThat(success.success()).isTrue();
+        assertThat(success.totalDocsScanned()).isEqualTo(12);
+
+        ReEncryptResult partial = new ReEncryptResult("ns", 8, 1, 3, 8, 9000);
+        assertThat(partial.success()).isFalse();
+        assertThat(partial.totalDocsScanned()).isEqualTo(12);
+    }
+
+    // ===== Test entities =====
 
     static class TestUser {
         @Encrypted
         private String email;
+    }
+
+    static class TestUserWithBlindIndex {
+        @Encrypted(blindIndex = true)
+        private String phone;
+    }
+
+    static class PlainEntity {
+        private String name;
     }
 
     // ===== Helper methods =====
@@ -237,12 +478,14 @@ class DekReEncryptionServiceTest {
     private static final class InMemoryDocumentRewriteStore implements DocumentRewriteStore {
         private final List<RawDocument> documents = new ArrayList<>();
         private final Map<String, String> checkpoints = new HashMap<>();
+        private final List<RawDocument> replacedDocs = new ArrayList<>();
         private int replaceCalls = 0;
         private boolean failReplace = false;
 
         void addDocument(RawDocument doc) { documents.add(doc); }
         void setFailReplace(boolean fail) { this.failReplace = fail; }
         int getReplaceCalls() { return replaceCalls; }
+        RawDocument getLastReplacedDoc() { return replacedDocs.isEmpty() ? null : replacedDocs.get(replacedDocs.size() - 1); }
 
         @Override
         public CloseableIterator<RawDocument> scan(ScanOptions options) {
@@ -263,6 +506,9 @@ class DekReEncryptionServiceTest {
         @Override
         public int replaceBatch(List<RawDocument> docs) {
             replaceCalls += docs.size();
+            if (!failReplace) {
+                replacedDocs.addAll(docs);
+            }
             return failReplace ? 0 : docs.size();
         }
 
