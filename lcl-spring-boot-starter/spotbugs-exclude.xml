@@ -12,6 +12,7 @@
             <Class name="io.github.emmansun.lightcrypto.service.FieldCryptoService"/>
             <Class name="io.github.emmansun.lightcrypto.service.KeyVaultService"/>
             <Class name="io.github.emmansun.lightcrypto.service.ProgrammaticCryptoService"/>
+            <Class name="io.github.emmansun.lightcrypto.service.DekReEncryptionService"/>
             <Class name="io.github.emmansun.lightcrypto.config.ObservabilityProperties"/>
             <Class name="io.github.emmansun.lightcrypto.observability.LclMetrics"/>
             <Class name="io.github.emmansun.lightcrypto.observability.LclHealthIndicator"/>

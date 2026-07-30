@@ -466,3 +466,7 @@ List<RewrapResult> results = keyVaultService.rewrapAllVaults(targetProvider);
 - [ ] Blind index queries verified post-migration
 - [ ] Runner disabled (`enabled: false`) after completion
 - [ ] Old provider credentials removed (after confirming no rollback needed)
+
+## Related Documentation
+
+- [Key Lifecycle Guide](../key-lifecycle.md) — Understanding CMK re-wrap vs DEK rotation vs DEK re-encryption

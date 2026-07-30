@@ -65,6 +65,8 @@ public record VaultDocument(
         /** Key has been rotated; still usable for decryption. */
         ROTATED,
         /** Key has been revoked; not usable. */
-        REVOKED
+        REVOKED,
+        /** Key has been retired after re-encryption; safe to delete. */
+        RETIRED
     }
 }

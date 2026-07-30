@@ -139,6 +139,8 @@ public class KeyVaultService {
 
     /**
      * Get the unwrapped DEK for the given namespace and DEK version.
+     *
+     * @throws FatalCryptoException if the resolved key entry has status RETIRED
      */
     public byte[] getDekByVersion(String namespace, int dekVersion) {
         NamespaceKeyContext ctx = namespaceKeyContexts.get(namespace);
@@ -149,6 +151,11 @@ public class KeyVaultService {
         if (pair == null) {
             throw new FatalCryptoException(
                     "No key found for namespace " + namespace + " with dekVersion " + dekVersion);
+        }
+        if (pair.status == KeyStatus.RETIRED) {
+            throw new FatalCryptoException(
+                    "Key for namespace " + namespace + " with dekVersion " + dekVersion
+                            + " has been RETIRED. Data should have been re-encrypted before retirement.");
         }
         return pair.dek;
     }
@@ -424,6 +431,149 @@ public class KeyVaultService {
         return results;
     }
 
+    /**
+     * Marks specified key entries as RETIRED for the given namespace.
+     * <p>
+     * Only keys with status ROTATED can be transitioned to RETIRED.
+     * This operation is called by the re-encryption engine after all documents
+     * have been migrated to the active DEK version.
+     * </p>
+     *
+     * @param namespace the canonical namespace
+     * @param kids      the set of key identifiers to mark as RETIRED
+     */
+    public void markKeysRetired(String namespace, Set<String> kids) {
+        synchronized (this) {
+            Optional<VaultDocument> optDoc = vaultStore.load(namespace);
+            if (optDoc.isEmpty()) {
+                throw new FatalCryptoException("Vault not found for namespace: " + namespace);
+            }
+
+            VaultDocument doc = optDoc.get();
+            long expectedVersion = doc.version();
+
+            List<KeyEntry> updatedKeys = new ArrayList<>();
+            boolean changed = false;
+            for (KeyEntry entry : doc.keys()) {
+                if (kids.contains(entry.kid()) && entry.status() == KeyStatus.ROTATED) {
+                    updatedKeys.add(new KeyEntry(
+                            entry.kid(), KeyStatus.RETIRED, entry.wrappedDek(), entry.wrappedHmac(),
+                            entry.wrappingAlgorithm(),
+                            entry.dekKcv(), entry.hmacKcv(), entry.binding(), entry.createdAt()));
+                    changed = true;
+                } else {
+                    updatedKeys.add(entry);
+                }
+            }
+
+            if (!changed) {
+                return;
+            }
+
+            VaultDocument updatedDoc = new VaultDocument(
+                    namespace,
+                    updatedKeys,
+                    doc.activeKid(),
+                    expectedVersion + 1,
+                    doc.cmkProvider(),
+                    doc.cmkId(),
+                    doc.createdAt(),
+                    Instant.now());
+
+            try {
+                vaultStore.rotate(updatedDoc);
+            } catch (OptimisticLockException e) {
+                throw new FatalCryptoException(
+                        "Concurrent modification detected while marking keys retired for namespace: " + namespace, e);
+            }
+
+            // Refresh cached context
+            NamespaceKeyContext evicted = namespaceKeyContexts.remove(namespace);
+            if (evicted != null) {
+                destroyKeyMaterial(evicted);
+            }
+            initForNamespace(namespace);
+
+            eventBus.emit(LclEvent.builder()
+                    .event("lcl.keyvault.keys.retired")
+                    .tier(EventTier.L2)
+                    .result("success")
+                    .namespace(namespace)
+                    .attribute("retiredKids", String.join(",", kids))
+                    .build());
+        }
+    }
+
+    /**
+     * Removes all RETIRED key entries from the vault document for the given namespace.
+     * <p>
+     * This is a manual operation for ops to clean up retired key material after
+     * verifying that re-encryption has completed successfully.
+     * </p>
+     *
+     * @param namespace the canonical namespace
+     * @return the number of RETIRED entries removed
+     */
+    public int pruneRetiredKeys(String namespace) {
+        synchronized (this) {
+            Optional<VaultDocument> optDoc = vaultStore.load(namespace);
+            if (optDoc.isEmpty()) {
+                throw new FatalCryptoException("Vault not found for namespace: " + namespace);
+            }
+
+            VaultDocument doc = optDoc.get();
+            long expectedVersion = doc.version();
+
+            List<KeyEntry> prunedKeys = new ArrayList<>();
+            int removedCount = 0;
+            for (KeyEntry entry : doc.keys()) {
+                if (entry.status() == KeyStatus.RETIRED) {
+                    removedCount++;
+                } else {
+                    prunedKeys.add(entry);
+                }
+            }
+
+            if (removedCount == 0) {
+                return 0;
+            }
+
+            VaultDocument updatedDoc = new VaultDocument(
+                    namespace,
+                    prunedKeys,
+                    doc.activeKid(),
+                    expectedVersion + 1,
+                    doc.cmkProvider(),
+                    doc.cmkId(),
+                    doc.createdAt(),
+                    Instant.now());
+
+            try {
+                vaultStore.rotate(updatedDoc);
+            } catch (OptimisticLockException e) {
+                throw new FatalCryptoException(
+                        "Concurrent modification detected while pruning retired keys for namespace: " + namespace, e);
+            }
+
+            // Refresh cached context
+            NamespaceKeyContext evicted = namespaceKeyContexts.remove(namespace);
+            if (evicted != null) {
+                destroyKeyMaterial(evicted);
+            }
+            initForNamespace(namespace);
+
+            eventBus.emit(LclEvent.builder()
+                    .event("lcl.keyvault.keys.pruned")
+                    .tier(EventTier.L2)
+                    .result("success")
+                    .namespace(namespace)
+                    .attribute("removedCount", String.valueOf(removedCount))
+                    .build());
+
+            return removedCount;
+        }
+    }
+
     // ===== Internal methods =====
 
     private void initForNamespace(String namespace) {
@@ -536,7 +686,7 @@ public class KeyVaultService {
                             "Key binding mismatch for kid " + entry.kid() + "! DEK/HMAC key pair corrupted.");
                 }
 
-                ResolvedKeyPair pair = new ResolvedKeyPair(unwrappedDek, unwrappedHmac);
+                ResolvedKeyPair pair = new ResolvedKeyPair(unwrappedDek, unwrappedHmac, entry.status());
                 resolvedKeys.put(entry.kid(), pair);
 
                 int version = parseVersion(entry.kid());
@@ -631,14 +781,16 @@ public class KeyVaultService {
 
     // ===== Inner classes =====
 
-    /** Holds unwrapped DEK and HMAC key pair. */
+    /** Holds unwrapped DEK and HMAC key pair with status. */
     static class ResolvedKeyPair {
         final byte[] dek;
         final byte[] hmacKey;
+        final KeyStatus status;
 
-        ResolvedKeyPair(byte[] dek, byte[] hmacKey) {
+        ResolvedKeyPair(byte[] dek, byte[] hmacKey, KeyStatus status) {
             this.dek = dek;
             this.hmacKey = hmacKey;
+            this.status = status;
         }
     }
 

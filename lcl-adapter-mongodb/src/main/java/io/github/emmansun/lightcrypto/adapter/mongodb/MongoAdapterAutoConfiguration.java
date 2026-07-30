@@ -8,6 +8,7 @@ import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.provider.CmkProvider;
+import io.github.emmansun.lightcrypto.service.DekReEncryptionService;
 import io.github.emmansun.lightcrypto.service.FieldCryptoService;
 import io.github.emmansun.lightcrypto.service.KeyVaultService;
 import io.github.emmansun.lightcrypto.service.ProgrammaticCryptoService;
@@ -228,5 +229,28 @@ public class MongoAdapterAutoConfiguration {
                 metadataCache.preWarm(entity.getType());
             }
         };
+    }
+
+    // ===== DEK Re-encryption support =====
+
+    @Bean
+    @ConditionalOnMissingBean(DocumentRewriteStore.class)
+    public MongoDocumentRewriteStore mongoDocumentRewriteStore(MongoTemplate mongoTemplate) {
+        return new MongoDocumentRewriteStore(mongoTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DekReEncryptionService.class)
+    public DekReEncryptionService dekReEncryptionService(
+            EntityMetadataCache entityMetadataCache,
+            KeyVaultService keyVaultService,
+            StorageAdapter storageAdapter,
+            DocumentRewriteStore documentRewriteStore,
+            TypeSerializer typeSerializer,
+            org.springframework.beans.factory.ObjectProvider<EventBus> eventBusProvider) {
+        EventBus eventBus = eventBusProvider.getIfAvailable(() -> NoOpEventBus.INSTANCE);
+        return new DekReEncryptionService(
+                entityMetadataCache, keyVaultService, storageAdapter,
+                documentRewriteStore, typeSerializer, eventBus);
     }
 }
