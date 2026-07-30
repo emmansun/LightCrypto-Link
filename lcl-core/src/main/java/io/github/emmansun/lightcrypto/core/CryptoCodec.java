@@ -9,6 +9,7 @@ import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.format.WireFormatDecoder;
 import io.github.emmansun.lightcrypto.core.format.WireFormatEncoder;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
+import io.github.emmansun.lightcrypto.exception.UnsupportedAlgorithmException;
 
 import java.security.SecureRandom;
 import java.util.Map;
@@ -99,11 +100,14 @@ public final class CryptoCodec {
      *
      * @param algorithm the algorithm identifier
      * @return the corresponding encryptor
+     * @throws UnsupportedAlgorithmException if no encryptor is registered
      */
     public static SymmetricEncryptor getEncryptor(AlgorithmId algorithm) {
         SymmetricEncryptor encryptor = ENCRYPTORS.get(algorithm);
         if (encryptor == null) {
-            throw new IllegalArgumentException("No encryptor registered for algorithm: " + algorithm);
+            throw new UnsupportedAlgorithmException(
+                    "No encryptor registered for algorithm: " + algorithm,
+                    algorithm.id() & 0xFF, algorithm.name());
         }
         return encryptor;
     }

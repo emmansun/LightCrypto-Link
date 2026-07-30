@@ -5,6 +5,8 @@ import io.github.emmansun.lightcrypto.core.format.WireFormatDecoder;
 import io.github.emmansun.lightcrypto.exception.DecryptionException;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
 import io.github.emmansun.lightcrypto.exception.KeyManagementException;
+import io.github.emmansun.lightcrypto.exception.PayloadCorruptionException;
+import io.github.emmansun.lightcrypto.exception.SchemaDriftException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.model.PathSegmentType;
@@ -176,7 +178,7 @@ public class FieldCryptoService {
         try {
             WireFormatDecoder.DecodedBlob decoded = WireFormatDecoder.decodeFromBase64Url(blob);
             dekVersion = decoded.dekVersion();
-        } catch (IllegalArgumentException ex) {
+        } catch (PayloadCorruptionException ex) {
             throw new DecryptionException(
                 "Invalid Wire Format blob for field '" + meta.bsonFieldName() + "'", ex);
         }
@@ -211,8 +213,9 @@ public class FieldCryptoService {
         try {
             value = typeDeserializer.deserialize(typeMarker, plaintext);
         } catch (RuntimeException ex) {
-            throw new DecryptionException(
-                "Failed to deserialize field '" + meta.bsonFieldName() + "' with type marker '" + typeMarker + "'", ex);
+            throw new SchemaDriftException(
+                "Failed to deserialize field '" + meta.bsonFieldName() + "' with type marker '" + typeMarker + "'",
+                ex, namespace, typeMarker, meta.bsonFieldName());
         }
 
         log.debug("Decrypted field '{}' using namespace {} and dekVersion {}",

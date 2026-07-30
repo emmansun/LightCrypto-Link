@@ -1,9 +1,12 @@
 package io.github.emmansun.lightcrypto.core.crypto;
 
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
+import io.github.emmansun.lightcrypto.exception.CryptoAuthenticationException;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.exception.EncryptionException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import javax.crypto.AEADBadTagException;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -44,7 +47,7 @@ public class Sm4GcmEncryptor implements SymmetricEncryptor {
             }
             return cipher.doFinal(plaintext);
         } catch (Exception e) {
-            throw new CryptoException("SM4-GCM encryption failed", e);
+            throw new EncryptionException("SM4-GCM encryption failed", e);
         }
     }
 
@@ -60,6 +63,9 @@ public class Sm4GcmEncryptor implements SymmetricEncryptor {
                 cipher.updateAAD(aad);
             }
             return cipher.doFinal(ciphertext);
+        } catch (AEADBadTagException e) {
+            throw new CryptoAuthenticationException(
+                    "SM4-GCM authentication failed", e, null, 0, algorithmId().name());
         } catch (Exception e) {
             throw new CryptoException("SM4-GCM decryption failed", e);
         }

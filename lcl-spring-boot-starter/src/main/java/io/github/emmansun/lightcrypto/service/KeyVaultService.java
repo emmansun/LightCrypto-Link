@@ -8,6 +8,7 @@ import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.exception.KeyResolutionException;
 import io.github.emmansun.lightcrypto.exception.OptimisticLockException;
 import io.github.emmansun.lightcrypto.model.GeneratedKey;
 import io.github.emmansun.lightcrypto.model.WrappedKey;
@@ -139,18 +140,19 @@ public class KeyVaultService {
 
     /**
      * Get the unwrapped DEK for the given namespace and DEK version.
+     * <p>
+     * This is a decrypt-path method: it does NOT auto-initialize vaults.
      *
+     * @throws KeyResolutionException if vault or DEK version not found
      * @throws FatalCryptoException if the resolved key entry has status RETIRED
      */
     public byte[] getDekByVersion(String namespace, int dekVersion) {
-        NamespaceKeyContext ctx = namespaceKeyContexts.get(namespace);
-        if (ctx == null) {
-            throw new FatalCryptoException("Vault not initialized for namespace: " + namespace);
-        }
+        NamespaceKeyContext ctx = ensureCachedForDecrypt(namespace, dekVersion);
         ResolvedKeyPair pair = ctx.resolvedKeysByVersion.get(dekVersion);
         if (pair == null) {
-            throw new FatalCryptoException(
-                    "No key found for namespace " + namespace + " with dekVersion " + dekVersion);
+            throw new KeyResolutionException(
+                    "No key found for namespace " + namespace + " with dekVersion " + dekVersion,
+                    namespace, dekVersion);
         }
         if (pair.status == KeyStatus.RETIRED) {
             throw new FatalCryptoException(
@@ -158,6 +160,30 @@ public class KeyVaultService {
                             + " has been RETIRED. Data should have been re-encrypted before retirement.");
         }
         return pair.dek;
+    }
+
+    /**
+     * Get the unwrapped HMAC key for the given namespace and DEK version.
+     * <p>
+     * This is a decrypt-path method: it does NOT auto-initialize vaults.
+     *
+     * @throws KeyResolutionException if vault or DEK version not found
+     * @throws FatalCryptoException if the resolved key entry has status RETIRED
+     */
+    public byte[] getHmacKeyByVersion(String namespace, int dekVersion) {
+        NamespaceKeyContext ctx = ensureCachedForDecrypt(namespace, dekVersion);
+        ResolvedKeyPair pair = ctx.resolvedKeysByVersion.get(dekVersion);
+        if (pair == null) {
+            throw new KeyResolutionException(
+                    "No HMAC key found for namespace " + namespace + " with dekVersion " + dekVersion,
+                    namespace, dekVersion);
+        }
+        if (pair.status == KeyStatus.RETIRED) {
+            throw new FatalCryptoException(
+                    "HMAC key for namespace " + namespace + " with dekVersion " + dekVersion
+                            + " has been RETIRED. Data should have been re-encrypted before retirement.");
+        }
+        return pair.hmacKey;
     }
 
     /**
@@ -575,6 +601,41 @@ public class KeyVaultService {
     }
 
     // ===== Internal methods =====
+
+    /**
+     * Ensure vault is cached for decrypt path. Does NOT auto-initialize.
+     * <p>
+     * This is the read-only counterpart to {@link #ensureVaultInitialized(String)}.
+     *
+     * @throws KeyResolutionException if vault does not exist
+     */
+    private NamespaceKeyContext ensureCachedForDecrypt(String namespace, int dekVersion) {
+        NamespaceKeyContext ctx = namespaceKeyContexts.get(namespace);
+        if (ctx != null && !ctx.isExpired()) {
+            return ctx;
+        }
+        // Vault not in cache — try to load from store (read-only, no auto-init)
+        synchronized (this) {
+            ctx = namespaceKeyContexts.get(namespace);
+            if (ctx != null && !ctx.isExpired()) {
+                return ctx;
+            }
+            Optional<VaultDocument> optDoc = vaultStore.load(namespace);
+            if (optDoc.isEmpty()) {
+                throw new KeyResolutionException(
+                        "Vault not found for namespace: " + namespace + " (decrypt path does not auto-initialize)",
+                        namespace, dekVersion);
+            }
+            verifyAndLoadKeys(optDoc.get(), namespace);
+            ctx = namespaceKeyContexts.get(namespace);
+            if (ctx == null) {
+                throw new KeyResolutionException(
+                        "Failed to load vault for namespace: " + namespace,
+                        namespace, dekVersion);
+            }
+            return ctx;
+        }
+    }
 
     private void initForNamespace(String namespace) {
         Optional<VaultDocument> optDoc = vaultStore.load(namespace);

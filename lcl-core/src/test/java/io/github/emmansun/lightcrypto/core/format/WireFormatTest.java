@@ -1,5 +1,7 @@
 package io.github.emmansun.lightcrypto.core.format;
 
+import io.github.emmansun.lightcrypto.exception.PayloadCorruptionException;
+import io.github.emmansun.lightcrypto.exception.UnsupportedAlgorithmException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -75,8 +77,12 @@ class WireFormatTest {
     @Test
     void unknownAlgorithmIdRejected() {
         assertThatThrownBy(() -> AlgorithmId.fromByte((byte) 0xFF))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("unknown algorithm ID");
+                .isInstanceOf(UnsupportedAlgorithmException.class)
+                .hasMessageContaining("unknown algorithm ID")
+                .satisfies(e -> {
+                    UnsupportedAlgorithmException ex = (UnsupportedAlgorithmException) e;
+                    assertThat(ex.getAlgorithmId()).isEqualTo(255);
+                });
     }
 
     @Test
@@ -87,15 +93,23 @@ class WireFormatTest {
         blob[0] = 0x02; // tamper version
 
         assertThatThrownBy(() -> WireFormatDecoder.decode(blob))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("unsupported wire format version");
+                .isInstanceOf(PayloadCorruptionException.class)
+                .hasMessageContaining("unsupported wire format version")
+                .satisfies(e -> {
+                    PayloadCorruptionException ex = (PayloadCorruptionException) e;
+                    assertThat(ex.getRawLength()).isEqualTo(blob.length);
+                });
     }
 
     @Test
     void truncatedBlobRejected() {
         assertThatThrownBy(() -> WireFormatDecoder.decode(new byte[5]))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("too short");
+                .isInstanceOf(PayloadCorruptionException.class)
+                .hasMessageContaining("too short")
+                .satisfies(e -> {
+                    PayloadCorruptionException ex = (PayloadCorruptionException) e;
+                    assertThat(ex.getRawLength()).isEqualTo(5);
+                });
     }
 
     @Test
@@ -104,7 +118,7 @@ class WireFormatTest {
         byte[] blob = new byte[]{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x0C,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x00, 0x00, 0x01};
         assertThatThrownBy(() -> WireFormatDecoder.decode(blob))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(PayloadCorruptionException.class)
                 .hasMessageContaining("namespace");
     }
 
@@ -135,12 +149,16 @@ class WireFormatTest {
     @Test
     void nullBlobRejected() {
         assertThatThrownBy(() -> WireFormatDecoder.decode(null))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(PayloadCorruptionException.class)
+                .satisfies(e -> {
+                    PayloadCorruptionException ex = (PayloadCorruptionException) e;
+                    assertThat(ex.getRawLength()).isEqualTo(-1);
+                });
     }
 
     @Test
     void emptyBase64UrlRejected() {
         assertThatThrownBy(() -> WireFormatDecoder.decodeFromBase64Url(""))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(PayloadCorruptionException.class);
     }
 }

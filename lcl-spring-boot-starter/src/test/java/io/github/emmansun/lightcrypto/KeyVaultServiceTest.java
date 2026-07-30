@@ -4,6 +4,7 @@ import io.github.emmansun.lightcrypto.config.KeyVaultProperties;
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.kcv.KeyCheckValue;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.exception.KeyResolutionException;
 import io.github.emmansun.lightcrypto.exception.OptimisticLockException;
 import io.github.emmansun.lightcrypto.spi.VaultDocument;
 import io.github.emmansun.lightcrypto.spi.VaultDocument.KeyEntry;
@@ -486,8 +487,8 @@ class KeyVaultServiceTest {
         KeyVaultService service = new KeyVaultService(new InMemoryVaultStore(), new IdentityCmkProvider(), (KeyVaultProperties) null);
 
         assertThatThrownBy(() -> service.getDekByVersion(TEST_NAMESPACE, 1))
-                .isInstanceOf(FatalCryptoException.class)
-                .hasMessageContaining("Vault not initialized for namespace");
+                .isInstanceOf(KeyResolutionException.class)
+                .hasMessageContaining("Vault not found for namespace");
     }
 
     @Test
@@ -501,7 +502,7 @@ class KeyVaultServiceTest {
         service.ensureVaultInitialized(TEST_NAMESPACE);
 
         assertThatThrownBy(() -> service.getDekByVersion(TEST_NAMESPACE, 9))
-                .isInstanceOf(FatalCryptoException.class)
+                .isInstanceOf(KeyResolutionException.class)
                 .hasMessageContaining("No key found for namespace")
                 .hasMessageContaining("dekVersion 9");
     }

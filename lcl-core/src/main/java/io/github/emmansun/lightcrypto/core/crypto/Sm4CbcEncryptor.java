@@ -1,9 +1,12 @@
 package io.github.emmansun.lightcrypto.core.crypto;
 
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
+import io.github.emmansun.lightcrypto.exception.CryptoAuthenticationException;
 import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.exception.EncryptionException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -40,7 +43,7 @@ public class Sm4CbcEncryptor implements SymmetricEncryptor {
                     new IvParameterSpec(iv));
             return cipher.doFinal(plaintext);
         } catch (Exception e) {
-            throw new CryptoException("SM4-CBC encryption failed", e);
+            throw new EncryptionException("SM4-CBC encryption failed", e);
         }
     }
 
@@ -53,6 +56,9 @@ public class Sm4CbcEncryptor implements SymmetricEncryptor {
                     new SecretKeySpec(sm4Key, KEY_ALGORITHM),
                     new IvParameterSpec(iv));
             return cipher.doFinal(ciphertext);
+        } catch (BadPaddingException e) {
+            throw new CryptoAuthenticationException(
+                    "SM4-CBC padding verification failed", e, null, 0, algorithmId().name());
         } catch (Exception e) {
             throw new CryptoException("SM4-CBC decryption failed", e);
         }

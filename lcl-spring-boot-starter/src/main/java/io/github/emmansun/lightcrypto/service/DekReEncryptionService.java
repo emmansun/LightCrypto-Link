@@ -9,6 +9,7 @@ import io.github.emmansun.lightcrypto.core.event.NoOpEventBus;
 import io.github.emmansun.lightcrypto.core.format.WireFormatDecoder;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.exception.FatalCryptoException;
+import io.github.emmansun.lightcrypto.exception.PayloadCorruptionException;
 import io.github.emmansun.lightcrypto.listener.EntityMetadataCache;
 import io.github.emmansun.lightcrypto.model.EncryptedFieldMetadata;
 import io.github.emmansun.lightcrypto.spi.DocumentRewriteStore;
@@ -219,7 +220,7 @@ public class DekReEncryptionService {
             WireFormatDecoder.DecodedBlob decoded;
             try {
                 decoded = WireFormatDecoder.decodeFromBase64Url(blob);
-            } catch (IllegalArgumentException e) {
+            } catch (PayloadCorruptionException e) {
                 log.warn("Invalid wire format for field {} in doc {}: {}", fieldName, doc.id(), e.getMessage());
                 continue;
             }

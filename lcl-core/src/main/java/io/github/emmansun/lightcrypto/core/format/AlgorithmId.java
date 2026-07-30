@@ -1,5 +1,7 @@
 package io.github.emmansun.lightcrypto.core.format;
 
+import io.github.emmansun.lightcrypto.exception.UnsupportedAlgorithmException;
+
 /**
  * Registry of supported symmetric encryption algorithm identifiers for Wire Format V1.
  *
@@ -57,7 +59,7 @@ public enum AlgorithmId {
      *
      * @param id the byte identifier
      * @return the corresponding AlgorithmId
-     * @throws IllegalArgumentException if the id is not recognized
+     * @throws UnsupportedAlgorithmException if the id is not recognized
      */
     public static AlgorithmId fromByte(byte id) {
         for (AlgorithmId alg : values()) {
@@ -65,7 +67,8 @@ public enum AlgorithmId {
                 return alg;
             }
         }
-        throw new IllegalArgumentException(
-                String.format("unknown algorithm ID: 0x%02X", id & 0xFF));
+        throw new UnsupportedAlgorithmException(
+                String.format("unknown algorithm ID: 0x%02X", id & 0xFF),
+                id & 0xFF, null);
     }
 }

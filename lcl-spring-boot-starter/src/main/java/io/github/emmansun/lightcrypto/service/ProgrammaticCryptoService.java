@@ -6,6 +6,7 @@ import io.github.emmansun.lightcrypto.core.format.WireFormatDecoder;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
 import io.github.emmansun.lightcrypto.exception.DecryptionException;
 import io.github.emmansun.lightcrypto.exception.KeyManagementException;
+import io.github.emmansun.lightcrypto.exception.PayloadCorruptionException;
 import io.github.emmansun.lightcrypto.spi.StructuredValueCodec;
 
 import java.util.LinkedHashMap;
@@ -136,7 +137,7 @@ public class ProgrammaticCryptoService {
         WireFormatDecoder.DecodedBlob decoded;
         try {
             decoded = WireFormatDecoder.decodeFromBase64Url(blob);
-        } catch (IllegalArgumentException ex) {
+        } catch (PayloadCorruptionException ex) {
             throw new DecryptionException("Invalid Wire Format blob", ex);
         }
 

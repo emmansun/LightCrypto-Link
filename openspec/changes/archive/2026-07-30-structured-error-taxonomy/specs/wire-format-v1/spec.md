@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Wire Format V1 byte layout
 The system SHALL encode encrypted payloads using the following binary layout:
@@ -28,28 +28,6 @@ The system SHALL encode encrypted payloads using the following binary layout:
 #### Scenario: Reject zero namespace length
 - **WHEN** decoding a blob whose namespaceLength field is 0
 - **THEN** the system SHALL throw `PayloadCorruptionException` indicating namespace is required
-
-### Requirement: AAD implicit binding
-The system SHALL construct AAD (Additional Authenticated Data) as the concatenation: `version_byte ‖ algorithmId_byte ‖ namespace_bytes ‖ dekVersion_bytes(4B big-endian)`. The AAD SHALL NOT be stored in the blob; it is reconstructed during decryption from the blob's own metadata fields.
-
-#### Scenario: AAD binds namespace to ciphertext
-- **WHEN** a ciphertext is encrypted with namespace "tenantA.app.User#email" and an attacker modifies the namespace bytes in the blob to "tenantB.app.User#email"
-- **THEN** GCM decryption SHALL fail with authentication error because the reconstructed AAD no longer matches
-
-#### Scenario: AAD binds dekVersion to ciphertext
-- **WHEN** a ciphertext is encrypted with dekVersion 1 and the dekVersion bytes in the blob are modified to 2
-- **THEN** GCM decryption SHALL fail with authentication error
-
-### Requirement: Base64URL storage encoding
-The system SHALL encode the Wire Format V1 binary blob as a Base64URL string without padding (`Base64.getUrlEncoder().withoutPadding()`) for storage in database fields. Decoding SHALL use `Base64.getUrlDecoder()`.
-
-#### Scenario: Storage string is URL-safe
-- **WHEN** a Wire Format blob is encoded for storage
-- **THEN** the resulting string SHALL contain only characters `[A-Za-z0-9_-]` with no `=` padding
-
-#### Scenario: Storage roundtrip
-- **WHEN** a blob is encoded to Base64URL string and decoded back
-- **THEN** the resulting bytes SHALL be identical to the original blob
 
 ### Requirement: Algorithm ID registry
 The system SHALL define algorithm IDs as: 0x01=AES_256_GCM, 0x02=AES_256_CBC, 0x03=SM4_GCM, 0x04=SM4_CBC. The encoder SHALL map `SymmetricAlgorithm` enum values to their corresponding byte IDs. The decoder SHALL map byte IDs back to enum values.

@@ -2,7 +2,7 @@ package io.github.emmansun.lightcrypto.core;
 
 import io.github.emmansun.lightcrypto.core.format.AlgorithmId;
 import io.github.emmansun.lightcrypto.core.namespace.Namespace;
-import io.github.emmansun.lightcrypto.exception.CryptoException;
+import io.github.emmansun.lightcrypto.exception.CryptoAuthenticationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -86,7 +86,8 @@ class CryptoCodecTest {
         String tampered = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
 
         assertThatThrownBy(() -> CryptoCodec.decrypt(dek, tampered))
-                .isInstanceOf(CryptoException.class);
+                .isInstanceOf(CryptoAuthenticationException.class)
+                .hasMessageContaining("authentication failed");
     }
 
     @Test
@@ -98,7 +99,7 @@ class CryptoCodecTest {
         String blob = CryptoCodec.encrypt(dek1, plaintext, AlgorithmId.AES_256_GCM, "User#email", 1);
 
         assertThatThrownBy(() -> CryptoCodec.decrypt(dek2, blob))
-                .isInstanceOf(CryptoException.class);
+                .isInstanceOf(CryptoAuthenticationException.class);
     }
 
     @Test
