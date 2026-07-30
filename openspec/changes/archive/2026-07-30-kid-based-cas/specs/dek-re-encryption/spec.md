@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: DocumentRewriteStore SPI
 The system SHALL provide a `DocumentRewriteStore` interface in `lcl-spi` enabling adapter-agnostic batch document scanning, atomic replacement, and checkpoint persistence.
@@ -50,19 +50,7 @@ The system SHALL provide a `DekReEncryptionService` that re-encrypts all documen
 - **WHEN** re-encryption progresses
 - **THEN** the engine SHALL emit `lcl.reencrypt.batch.completed` (L2) per batch and `lcl.reencrypt.namespace.completed` (L2) on full completion, including docsProcessed, docsSkipped, docsFailed, and durationMicros
 
-### Requirement: RETIRED key status
-The `KeyStatus` enum SHALL include a `RETIRED` value indicating that a key entry is no longer needed for any runtime operation and can be safely deleted.
-
-#### Scenario: RETIRED keys not used for decryption
-- **WHEN** a decryption request resolves to a key entry with status RETIRED
-- **THEN** the system SHALL throw `FatalCryptoException` indicating the key has been retired (data should have been re-encrypted before retirement)
-
-#### Scenario: Prune retired keys
-- **WHEN** `KeyVaultService.pruneRetiredKeys(namespace)` is invoked
-- **THEN** the system SHALL remove all RETIRED entries from the vault document and persist atomically
-
-### Requirement: Key lifecycle documentation
-The project SHALL include `docs/key-lifecycle.md` explaining the three key operations (CMK re-wrap, DEK rotation, DEK re-encryption), their scope, cost, and when to use each.
+## ADDED Requirements
 
 ### Requirement: RawDocument carries per-field kid snapshot
 The `RawDocument` record SHALL include a `fieldKids` map (`Map<String, String>`) containing field path to kid snapshot entries for each encrypted field that has a `_k` sub-field. The record SHALL NOT include a `concurrencyToken` field.

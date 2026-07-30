@@ -24,15 +24,15 @@ import java.util.concurrent.TimeUnit;
 /**
  * MongoDB implementation of {@link DocumentRewriteStore} using {@link MongoTemplate}.
  * <p>
- * Provides cursor-based batch scanning with stable {@code _id} order, CAS replacement
- * via {@code updatedAt} field, and checkpoint persistence in a dedicated collection.
+ * Provides cursor-based batch scanning with stable {@code _id} order, per-field
+ * kid-based CAS replacement via dot-notation {@code _k} filters, and checkpoint
+ * persistence in a dedicated collection.
  *
  * @since 1.1.0
  */
 public class MongoDocumentRewriteStore implements DocumentRewriteStore {
 
     private static final String DEFAULT_CHECKPOINT_COLLECTION = "__lcl_checkpoints";
-    private static final String DEFAULT_CONCURRENCY_FIELD = "updatedAt";
 
     /** Internal field keys used for routing/type preservation — not part of business data. */
     private static final String INTERNAL_COLLECTION_KEY = "_lcl_collection";
@@ -40,18 +40,15 @@ public class MongoDocumentRewriteStore implements DocumentRewriteStore {
 
     private final MongoTemplate mongoTemplate;
     private final String checkpointCollection;
-    private final String concurrencyField;
 
     public MongoDocumentRewriteStore(MongoTemplate mongoTemplate) {
-        this(mongoTemplate, DEFAULT_CHECKPOINT_COLLECTION, DEFAULT_CONCURRENCY_FIELD);
+        this(mongoTemplate, DEFAULT_CHECKPOINT_COLLECTION);
     }
 
     public MongoDocumentRewriteStore(MongoTemplate mongoTemplate,
-                                     String checkpointCollection,
-                                     String concurrencyField) {
+                                     String checkpointCollection) {
         this.mongoTemplate = mongoTemplate;
         this.checkpointCollection = checkpointCollection != null ? checkpointCollection : DEFAULT_CHECKPOINT_COLLECTION;
-        this.concurrencyField = concurrencyField != null ? concurrencyField : DEFAULT_CONCURRENCY_FIELD;
     }
 
     @Override
@@ -86,12 +83,7 @@ public class MongoDocumentRewriteStore implements DocumentRewriteStore {
     public boolean replace(RawDocument document) {
         String collectionName = extractCollectionName(document);
         Object rawId = extractRawId(document);
-        Document filter = new Document("_id", rawId);
-
-        // CAS on concurrency token
-        if (document.concurrencyToken() != null) {
-            filter.append(concurrencyField, document.concurrencyToken());
-        }
+        Document filter = buildCasFilter(rawId, document);
 
         Document replacement = toBsonDocument(document);
 
@@ -122,10 +114,7 @@ public class MongoDocumentRewriteStore implements DocumentRewriteStore {
             List<WriteModel<Document>> writes = new ArrayList<>(docs.size());
             for (RawDocument doc : docs) {
                 Object rawId = extractRawId(doc);
-                Document filter = new Document("_id", rawId);
-                if (doc.concurrencyToken() != null) {
-                    filter.append(concurrencyField, doc.concurrencyToken());
-                }
+                Document filter = buildCasFilter(rawId, doc);
                 Document replacement = toBsonDocument(doc);
                 writes.add(new ReplaceOneModel<>(filter, replacement, new ReplaceOptions().upsert(false)));
             }
@@ -165,6 +154,21 @@ public class MongoDocumentRewriteStore implements DocumentRewriteStore {
     }
 
     // ===== Internal methods =====
+
+    /**
+     * Builds a CAS filter using per-field kid dot-notation conditions.
+     * If {@code fieldKids} is empty, returns an {@code _id}-only filter.
+     */
+    Document buildCasFilter(Object rawId, RawDocument document) {
+        Document filter = new Document("_id", rawId);
+        Map<String, String> fieldKids = document.fieldKids();
+        if (fieldKids != null) {
+            for (Map.Entry<String, String> entry : fieldKids.entrySet()) {
+                filter.append(entry.getKey() + "._k", entry.getValue());
+            }
+        }
+        return filter;
+    }
 
     private String extractCollectionName(RawDocument doc) {
         Object collectionHint = doc.fields().get(INTERNAL_COLLECTION_KEY);
@@ -234,9 +238,19 @@ public class MongoDocumentRewriteStore implements DocumentRewriteStore {
             fields.put(INTERNAL_COLLECTION_KEY, collectionName);
             fields.put(INTERNAL_RAW_ID_KEY, rawId);
 
-            Object concurrencyToken = doc.get(concurrencyField);
+            // Extract per-field kid snapshots from encrypted sub-documents
+            Map<String, String> fieldKids = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : doc.entrySet()) {
+                String key = entry.getKey();
+                if (key.startsWith("_")) {
+                    continue;
+                }
+                if (entry.getValue() instanceof Document subDoc && subDoc.containsKey("_k")) {
+                    fieldKids.put(key, subDoc.getString("_k"));
+                }
+            }
 
-            return new RawDocument(id, fields, concurrencyToken);
+            return new RawDocument(id, fields, fieldKids);
         }
     }
 }

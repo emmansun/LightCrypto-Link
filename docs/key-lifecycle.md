@@ -90,7 +90,11 @@ if (result.success()) {
 
 **Characteristics:**
 - Heavy: O(all documents), may run for hours
-- No downtime required (CAS-based concurrency protection)
+- No downtime required (per-field kid-based CAS concurrency protection)
+- CAS strategy: each encrypted field's `_k` (kid) sub-document value is used as the
+  compare-and-swap condition. If a field is concurrently re-encrypted by the application
+  (kid changes between scan and write-back), the replace is skipped — not the entire document.
+  Documents without `_k` (legacy blobs) fall back to `_id`-only filter.
 - Checkpoint-based resumability
 - Old key status: `ROTATED` → `RETIRED` (automatic on completion)
 

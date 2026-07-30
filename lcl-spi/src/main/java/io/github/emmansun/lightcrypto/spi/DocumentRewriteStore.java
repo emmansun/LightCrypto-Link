@@ -30,11 +30,12 @@ public interface DocumentRewriteStore {
     CloseableIterator<RawDocument> scan(ScanOptions options);
 
     /**
-     * Atomically replaces a document using CAS on the concurrency token.
+     * Atomically replaces a document using per-field kid CAS.
      *
-     * <p>The replacement SHALL succeed ONLY if the document's current concurrency token
-     * (e.g., {@code updatedAt}) matches the value read during scan. If the document was
-     * modified concurrently by the application, the replace SHALL return {@code false}.
+     * <p>The replacement SHALL succeed ONLY if each encrypted field's current {@code _k}
+     * value matches the kid snapshot in {@link RawDocument#fieldKids()}. If any field was
+     * concurrently re-encrypted (kid changed), the replace SHALL return {@code false}.
+     * If {@code fieldKids} is empty, an {@code _id}-only filter is used (no CAS protection).
      *
      * @param document the document with updated field values
      * @return true if the replacement succeeded, false on CAS conflict

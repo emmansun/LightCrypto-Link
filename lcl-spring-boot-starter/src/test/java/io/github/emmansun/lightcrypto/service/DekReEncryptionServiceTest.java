@@ -91,7 +91,7 @@ class DekReEncryptionServiceTest {
         fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
 
-        RawDocument doc = new RawDocument("doc1", fields, null);
+        RawDocument doc = new RawDocument("doc1", fields, Map.of());
         rewriteStore.addDocument(doc);
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
@@ -112,7 +112,7 @@ class DekReEncryptionServiceTest {
         fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
 
-        RawDocument doc = new RawDocument("doc1", fields, null);
+        RawDocument doc = new RawDocument("doc1", fields, Map.of());
         rewriteStore.addDocument(doc);
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
@@ -132,9 +132,10 @@ class DekReEncryptionServiceTest {
         fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
 
-        RawDocument doc = new RawDocument("doc1", fields, null);
+        // fieldKids carries the kid snapshot from scan phase
+        RawDocument doc = new RawDocument("doc1", fields, Map.of("email", "v1-aaaaaaaa"));
         rewriteStore.addDocument(doc);
-        rewriteStore.setFailReplace(true); // Simulate CAS conflict
+        rewriteStore.setFailReplace(true); // Simulate CAS conflict (_k changed concurrently)
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
         ReEncryptResult result = service.reEncrypt(TestUser.class, options);
@@ -151,7 +152,7 @@ class DekReEncryptionServiceTest {
         fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
 
-        RawDocument doc = new RawDocument("doc1", fields, null);
+        RawDocument doc = new RawDocument("doc1", fields, Map.of());
         rewriteStore.addDocument(doc);
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class)
@@ -172,7 +173,7 @@ class DekReEncryptionServiceTest {
         fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
 
-        RawDocument doc = new RawDocument("doc1", fields, null);
+        RawDocument doc = new RawDocument("doc1", fields, Map.of());
         rewriteStore.addDocument(doc);
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class)
@@ -193,7 +194,7 @@ class DekReEncryptionServiceTest {
         fields.put("phone", Map.of("c", blob, "_e", 1, "_t", "STR", "b", "old-blind-index"));
         fields.put("_collection", "testUserBi");
 
-        RawDocument doc = new RawDocument("doc-bi", fields, null);
+        RawDocument doc = new RawDocument("doc-bi", fields, Map.of());
         rewriteStore.addDocument(doc);
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUserWithBlindIndex.class);
@@ -220,7 +221,7 @@ class DekReEncryptionServiceTest {
             Map<String, Object> fields = new LinkedHashMap<>();
             fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
             fields.put("_collection", "testUser");
-            rewriteStore.addDocument(new RawDocument("doc-" + i, fields, null));
+            rewriteStore.addDocument(new RawDocument("doc-" + i, fields, Map.of()));
         }
 
         ReEncryptOptions options = new ReEncryptOptions(TestUser.class, 3, "batch-task", false, 2);
@@ -244,7 +245,7 @@ class DekReEncryptionServiceTest {
         Map<String, Object> validFields = new LinkedHashMap<>();
         validFields.put("email", Map.of("c", validBlob, "_e", 1, "_t", "STR"));
         validFields.put("_collection", "testUser");
-        rewriteStore.addDocument(new RawDocument("doc-valid", validFields, null));
+        rewriteStore.addDocument(new RawDocument("doc-valid", validFields, Map.of()));
 
         // Second doc: valid wire format but encrypted with WRONG key (GCM auth will fail)
         byte[] wrongDek = fixedKey((byte) 0x99);
@@ -253,7 +254,7 @@ class DekReEncryptionServiceTest {
         Map<String, Object> corruptFields = new LinkedHashMap<>();
         corruptFields.put("email", Map.of("c", badBlob, "_e", 1, "_t", "STR"));
         corruptFields.put("_collection", "testUser");
-        rewriteStore.addDocument(new RawDocument("doc-corrupt", corruptFields, null));
+        rewriteStore.addDocument(new RawDocument("doc-corrupt", corruptFields, Map.of()));
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
         ReEncryptResult result = service.reEncrypt(TestUser.class, options);
@@ -271,13 +272,13 @@ class DekReEncryptionServiceTest {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("email", null);
         fields.put("_collection", "testUser");
-        rewriteStore.addDocument(new RawDocument("doc-null", fields, null));
+        rewriteStore.addDocument(new RawDocument("doc-null", fields, Map.of()));
 
         // Document with non-encrypted field (plain string, not a payload map)
         Map<String, Object> fields2 = new LinkedHashMap<>();
         fields2.put("email", "plain-text-not-encrypted");
         fields2.put("_collection", "testUser");
-        rewriteStore.addDocument(new RawDocument("doc-plain", fields2, null));
+        rewriteStore.addDocument(new RawDocument("doc-plain", fields2, Map.of()));
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
         ReEncryptResult result = service.reEncrypt(TestUser.class, options);
@@ -293,7 +294,7 @@ class DekReEncryptionServiceTest {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("email", Map.of("c", "not-valid-base64url!!!", "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
-        rewriteStore.addDocument(new RawDocument("doc-invalid", fields, null));
+        rewriteStore.addDocument(new RawDocument("doc-invalid", fields, Map.of()));
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
         ReEncryptResult result = service.reEncrypt(TestUser.class, options);
@@ -333,7 +334,7 @@ class DekReEncryptionServiceTest {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("email", Map.of("c", blob, "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
-        rewriteStore.addDocument(new RawDocument("doc-evt", fields, null));
+        rewriteStore.addDocument(new RawDocument("doc-evt", fields, Map.of()));
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class).withBatchSize(1);
         serviceWithBus.reEncrypt(TestUser.class, options);
@@ -366,7 +367,7 @@ class DekReEncryptionServiceTest {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("email", Map.of("c", badBlob, "_e", 1, "_t", "STR"));
         fields.put("_collection", "testUser");
-        rewriteStore.addDocument(new RawDocument("doc-fail", fields, null));
+        rewriteStore.addDocument(new RawDocument("doc-fail", fields, Map.of()));
 
         ReEncryptOptions options = ReEncryptOptions.forEntity(TestUser.class);
         serviceWithBus.reEncrypt(TestUser.class, options);
