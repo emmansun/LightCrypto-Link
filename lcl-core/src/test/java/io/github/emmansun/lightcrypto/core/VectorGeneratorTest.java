@@ -55,6 +55,7 @@ class VectorGeneratorTest {
         Files.createDirectories(root.resolve("blind-index"));
         Files.createDirectories(root.resolve("kcv"));
         Files.createDirectories(root.resolve("roundtrip"));
+        Files.createDirectories(root.resolve("combined"));
 
         String aesGcm = generateEncryptionVectors(AlgorithmId.AES_256_GCM, AES_256_KEY, GCM_IV, "enc-aes256gcm");
         String aesCbc = generateEncryptionVectors(AlgorithmId.AES_256_CBC, AES_256_KEY, CBC_IV, "enc-aes256cbc");
@@ -74,6 +75,9 @@ class VectorGeneratorTest {
 
         String roundtrip = generateRoundtripVectors();
         Files.writeString(root.resolve("roundtrip/roundtrip.json"), roundtrip);
+
+        String combined = generateCombinedVectors();
+        Files.writeString(root.resolve("combined/field-document.json"), combined);
 
         // Generate manifest with SHA-256 hashes
         String manifest = generateManifest(root);
@@ -262,7 +266,8 @@ class VectorGeneratorTest {
                 "encryption/sm4-cbc.json",
                 "blind-index/hmac-sha256.json",
                 "kcv/kcv.json",
-                "roundtrip/roundtrip.json"
+                "roundtrip/roundtrip.json",
+                "combined/field-document.json"
         };
 
         StringBuilder sb = new StringBuilder();
@@ -284,6 +289,98 @@ class VectorGeneratorTest {
 
         sb.append("  ]\n");
         sb.append("}\n");
+        return sb.toString();
+    }
+
+    /**
+     * Generates combined field-document vectors: encryption + blind index together,
+     * representing the complete BSON sub-document structure both SDKs must produce.
+     */
+    private String generateCombinedVectors() {
+        BlindIndexEngine engine = new BlindIndexEngine(HMAC_KEY);
+        StringBuilder sb = new StringBuilder("[\n");
+
+        // Case definitions: {alg, key, iv, plaintext, namespace, fieldName, dekVersion, kid, typeTag}
+        Object[][] cases = {
+                {AlgorithmId.AES_256_CBC, AES_256_KEY, CBC_IV, "13800138000", "default.default.User#phone", "phone", 1, "v1-kid", "STR"},
+                {AlgorithmId.AES_256_GCM, AES_256_KEY, GCM_IV, "13800138000", "default.default.User#phone", "phone", 1, "v1-kid", "STR"},
+                {AlgorithmId.SM4_CBC, SM4_KEY, CBC_IV, "13800138000", "default.default.User#phone", "phone", 1, "v1-kid", "STR"},
+                {AlgorithmId.SM4_GCM, SM4_KEY, GCM_IV, "13800138000", "default.default.User#phone", "phone", 1, "v1-kid", "STR"},
+                // Multi-tenant: same plaintext, different namespace → different blind index
+                {AlgorithmId.AES_256_CBC, AES_256_KEY, CBC_IV, "13800138000", "tenantA.production.User#phone", "phone", 1, "v1-kid", "STR"},
+                // Multi-version DEK: dekVersion=2
+                {AlgorithmId.AES_256_CBC, AES_256_KEY, CBC_IV, "13900139000", "default.default.User#phone", "phone", 2, "v2-kid", "STR"},
+                // Non-string type (Integer serialized as 4-byte big-endian)
+                {AlgorithmId.AES_256_CBC, AES_256_KEY, CBC_IV, null, "default.default.User#age", "age", 1, "v1-kid", "INT"},
+        };
+
+        for (int i = 0; i < cases.length; i++) {
+            AlgorithmId alg = (AlgorithmId) cases[i][0];
+            byte[] key = (byte[]) cases[i][1];
+            byte[] iv = (byte[]) cases[i][2];
+            String plaintextStr = (String) cases[i][3];
+            String nsStr = (String) cases[i][4];
+            String fieldName = (String) cases[i][5];
+            int dekVersion = (int) cases[i][6];
+            String kid = (String) cases[i][7];
+            String typeTag = (String) cases[i][8];
+
+            Namespace ns = Namespace.parse(nsStr);
+            byte[] plaintextBytes;
+            String blindIndex;
+
+            if ("INT".equals(typeTag)) {
+                // Integer 30 → 4-byte big-endian
+                plaintextBytes = new byte[]{0, 0, 0, 30};
+                blindIndex = engine.computeBlindIndex(ns, fieldName, plaintextBytes);
+            } else {
+                plaintextBytes = plaintextStr.getBytes(StandardCharsets.UTF_8);
+                blindIndex = engine.computeBlindIndex(ns, fieldName, plaintextStr);
+            }
+
+            // Encrypt
+            byte[] aad = alg.isGcm() ? WireFormatEncoder.buildAad(alg, nsStr, dekVersion) : new byte[0];
+            SymmetricEncryptor encryptor = CryptoCodec.getEncryptor(alg);
+            byte[] ct = encryptor.encrypt(key, iv, plaintextBytes, aad);
+            byte[] blob = WireFormatEncoder.encode(alg, nsStr, dekVersion, iv, ct);
+            String blobBase64 = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(blob);
+
+            if (i > 0) sb.append(",\n");
+            sb.append("  {\n");
+            sb.append(String.format("    \"id\": \"doc-%s-%03d\",\n",
+                    alg.name().toLowerCase().replace('_', '-'), i + 1));
+            sb.append(String.format("    \"algorithm\": \"%s\",\n", alg.name()));
+            sb.append(String.format("    \"algorithmId\": %d,\n", alg.id() & 0xFF));
+            sb.append("    \"input\": {\n");
+            sb.append(String.format("      \"dekHex\": \"%s\",\n", HEX.formatHex(key)));
+            sb.append(String.format("      \"hmacKeyHex\": \"%s\",\n", HEX.formatHex(HMAC_KEY)));
+            if ("INT".equals(typeTag)) {
+                sb.append("      \"plaintextHex\": \"0000001e\",\n");
+                sb.append("      \"plaintextDisplay\": \"30 (Integer)\",\n");
+            } else {
+                sb.append(String.format("      \"plaintext\": \"%s\",\n", plaintextStr));
+            }
+            sb.append(String.format("      \"namespace\": \"%s\",\n", nsStr));
+            sb.append(String.format("      \"fieldName\": \"%s\",\n", fieldName));
+            sb.append(String.format("      \"dekVersion\": %d,\n", dekVersion));
+            sb.append(String.format("      \"kid\": \"%s\",\n", kid));
+            sb.append(String.format("      \"ivHex\": \"%s\"\n", HEX.formatHex(iv)));
+            sb.append("    },\n");
+            sb.append("    \"expected\": {\n");
+            sb.append(String.format("      \"wireFormatBase64url\": \"%s\",\n", blobBase64));
+            sb.append(String.format("      \"blindIndexBase64url\": \"%s\",\n", blindIndex));
+            sb.append("      \"document\": {\n");
+            sb.append("        \"_e\": 1,\n");
+            sb.append(String.format("        \"_t\": \"%s\",\n", typeTag));
+            sb.append(String.format("        \"_k\": \"%s\",\n", kid));
+            sb.append(String.format("        \"c\": \"%s\",\n", blobBase64));
+            sb.append(String.format("        \"b\": \"%s\"\n", blindIndex));
+            sb.append("      }\n");
+            sb.append("    }\n");
+            sb.append("  }");
+        }
+
+        sb.append("\n]\n");
         return sb.toString();
     }
 

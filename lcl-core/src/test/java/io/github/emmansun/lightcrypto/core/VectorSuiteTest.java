@@ -48,7 +48,7 @@ class VectorSuiteTest {
         assertThat(manifest.get("wireFormatVersion").getAsInt()).isEqualTo(1);
 
         JsonArray files = manifest.getAsJsonArray("files");
-        assertThat(files.size()).isGreaterThanOrEqualTo(7);
+        assertThat(files.size()).isGreaterThanOrEqualTo(8);
 
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
         for (JsonElement elem : files) {
@@ -200,6 +200,70 @@ class VectorSuiteTest {
             boolean actualOk = java.util.Arrays.equals(plaintext, decrypted);
 
             assertThat(actualOk).as(id + " roundtrip").isEqualTo(expectedOk).isTrue();
+        }
+    }
+
+    @Test
+    void combinedFieldDocumentVectors() throws Exception {
+        JsonArray vectors = readVectorFile("combined/field-document.json");
+        assertThat(vectors.size()).isGreaterThanOrEqualTo(7);
+
+        for (JsonElement elem : vectors) {
+            JsonObject vector = elem.getAsJsonObject();
+            String id = vector.get("id").getAsString();
+            String algName = vector.get("algorithm").getAsString();
+            AlgorithmId alg = AlgorithmId.valueOf(algName);
+
+            JsonObject input = vector.getAsJsonObject("input");
+            byte[] dek = HEX.parseHex(input.get("dekHex").getAsString());
+            byte[] hmacKey = HEX.parseHex(input.get("hmacKeyHex").getAsString());
+            String namespace = input.get("namespace").getAsString();
+            String fieldName = input.get("fieldName").getAsString();
+            int dekVersion = input.get("dekVersion").getAsInt();
+            byte[] iv = HEX.parseHex(input.get("ivHex").getAsString());
+
+            // Determine plaintext bytes
+            byte[] plaintextBytes;
+            if (input.has("plaintextHex")) {
+                plaintextBytes = HEX.parseHex(input.get("plaintextHex").getAsString());
+            } else {
+                plaintextBytes = input.get("plaintext").getAsString().getBytes(StandardCharsets.UTF_8);
+            }
+
+            JsonObject expected = vector.getAsJsonObject("expected");
+            String expectedBlob = expected.get("wireFormatBase64url").getAsString();
+            String expectedBlindIndex = expected.get("blindIndexBase64url").getAsString();
+            JsonObject expectedDoc = expected.getAsJsonObject("document");
+
+            // 1. Verify encryption produces expected wire format blob
+            byte[] aad = alg.isGcm()
+                    ? WireFormatEncoder.buildAad(alg, namespace, dekVersion)
+                    : new byte[0];
+            SymmetricEncryptor encryptor = CryptoCodec.getEncryptor(alg);
+            byte[] ct = encryptor.encrypt(dek, iv, plaintextBytes, aad);
+            byte[] blob = WireFormatEncoder.encode(alg, namespace, dekVersion, iv, ct);
+            String actualBlob = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(blob);
+            assertThat(actualBlob).as(id + " wireFormat").isEqualTo(expectedBlob);
+
+            // 2. Verify blind index computation
+            BlindIndexEngine engine = new BlindIndexEngine(hmacKey);
+            Namespace ns = Namespace.parse(namespace);
+            String actualBlindIndex;
+            if (input.has("plaintext")) {
+                actualBlindIndex = engine.computeBlindIndex(ns, fieldName, input.get("plaintext").getAsString());
+            } else {
+                actualBlindIndex = engine.computeBlindIndex(ns, fieldName, plaintextBytes);
+            }
+            assertThat(actualBlindIndex).as(id + " blindIndex").isEqualTo(expectedBlindIndex);
+
+            // 3. Verify document structure fields
+            assertThat(expectedDoc.get("_e").getAsInt()).as(id + " _e").isEqualTo(1);
+            assertThat(expectedDoc.get("c").getAsString()).as(id + " doc.c").isEqualTo(expectedBlob);
+            assertThat(expectedDoc.get("b").getAsString()).as(id + " doc.b").isEqualTo(expectedBlindIndex);
+
+            // 4. Verify decryption roundtrip
+            byte[] decrypted = CryptoCodec.decrypt(dek, expectedBlob);
+            assertThat(decrypted).as(id + " decrypt").isEqualTo(plaintextBytes);
         }
     }
 

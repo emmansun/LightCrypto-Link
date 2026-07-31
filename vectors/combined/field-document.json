@@ -1,0 +1,185 @@
+[
+  {
+    "id": "doc-aes-256-cbc-001",
+    "algorithm": "AES_256_CBC",
+    "algorithmId": 2,
+    "input": {
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "hmacKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "plaintext": "13800138000",
+      "namespace": "default.default.User#phone",
+      "fieldName": "phone",
+      "dekVersion": 1,
+      "kid": "v1-kid",
+      "ivHex": "000102030405060708090a0b0c0d0e0f"
+    },
+    "expected": {
+      "wireFormatBase64url": "AQIAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAARAAAQIDBAUGBwgJCgsMDQ4PAACrQ-wBqgjsVKadlvEtgA_g",
+      "blindIndexBase64url": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E",
+      "document": {
+        "_e": 1,
+        "_t": "STR",
+        "_k": "v1-kid",
+        "c": "AQIAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAARAAAQIDBAUGBwgJCgsMDQ4PAACrQ-wBqgjsVKadlvEtgA_g",
+        "b": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E"
+      }
+    }
+  },
+  {
+    "id": "doc-aes-256-gcm-002",
+    "algorithm": "AES_256_GCM",
+    "algorithmId": 1,
+    "input": {
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "hmacKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "plaintext": "13800138000",
+      "namespace": "default.default.User#phone",
+      "fieldName": "phone",
+      "dekVersion": 1,
+      "kid": "v1-kid",
+      "ivHex": "000102030405060708090a0b"
+    },
+    "expected": {
+      "wireFormatBase64url": "AQEAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAAQwAAQIDBAUGBwgJCgsAAHYx7iv11PEjvXGnE_M018hPMc-mDvDFtJwYMg",
+      "blindIndexBase64url": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E",
+      "document": {
+        "_e": 1,
+        "_t": "STR",
+        "_k": "v1-kid",
+        "c": "AQEAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAAQwAAQIDBAUGBwgJCgsAAHYx7iv11PEjvXGnE_M018hPMc-mDvDFtJwYMg",
+        "b": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E"
+      }
+    }
+  },
+  {
+    "id": "doc-sm4-cbc-003",
+    "algorithm": "SM4_CBC",
+    "algorithmId": 4,
+    "input": {
+      "dekHex": "000102030405060708090a0b0c0d0e0f",
+      "hmacKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "plaintext": "13800138000",
+      "namespace": "default.default.User#phone",
+      "fieldName": "phone",
+      "dekVersion": 1,
+      "kid": "v1-kid",
+      "ivHex": "000102030405060708090a0b0c0d0e0f"
+    },
+    "expected": {
+      "wireFormatBase64url": "AQQAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAARAAAQIDBAUGBwgJCgsMDQ4PAABRDXFGM6URv1qfCGNzpHmo",
+      "blindIndexBase64url": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E",
+      "document": {
+        "_e": 1,
+        "_t": "STR",
+        "_k": "v1-kid",
+        "c": "AQQAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAARAAAQIDBAUGBwgJCgsMDQ4PAABRDXFGM6URv1qfCGNzpHmo",
+        "b": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E"
+      }
+    }
+  },
+  {
+    "id": "doc-sm4-gcm-004",
+    "algorithm": "SM4_GCM",
+    "algorithmId": 3,
+    "input": {
+      "dekHex": "000102030405060708090a0b0c0d0e0f",
+      "hmacKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "plaintext": "13800138000",
+      "namespace": "default.default.User#phone",
+      "fieldName": "phone",
+      "dekVersion": 1,
+      "kid": "v1-kid",
+      "ivHex": "000102030405060708090a0b"
+    },
+    "expected": {
+      "wireFormatBase64url": "AQMAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAAQwAAQIDBAUGBwgJCgsAAKZ15sv5W7Y4z6xElv72_YohTj8lnTQl8Im6gQ",
+      "blindIndexBase64url": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E",
+      "document": {
+        "_e": 1,
+        "_t": "STR",
+        "_k": "v1-kid",
+        "c": "AQMAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAAQwAAQIDBAUGBwgJCgsAAKZ15sv5W7Y4z6xElv72_YohTj8lnTQl8Im6gQ",
+        "b": "ylXcNVT8lNaPzZyV_2JQqpEBxx4_KSnGMhW-C01kV_E"
+      }
+    }
+  },
+  {
+    "id": "doc-aes-256-cbc-005",
+    "algorithm": "AES_256_CBC",
+    "algorithmId": 2,
+    "input": {
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "hmacKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "plaintext": "13800138000",
+      "namespace": "tenantA.production.User#phone",
+      "fieldName": "phone",
+      "dekVersion": 1,
+      "kid": "v1-kid",
+      "ivHex": "000102030405060708090a0b0c0d0e0f"
+    },
+    "expected": {
+      "wireFormatBase64url": "AQIAHXRlbmFudEEucHJvZHVjdGlvbi5Vc2VyI3Bob25lAAAAARAAAQIDBAUGBwgJCgsMDQ4PAACrQ-wBqgjsVKadlvEtgA_g",
+      "blindIndexBase64url": "1OCsE03PaR-4jOCtTn7q5Md8FU4d-JK_qZauh3q1U8Y",
+      "document": {
+        "_e": 1,
+        "_t": "STR",
+        "_k": "v1-kid",
+        "c": "AQIAHXRlbmFudEEucHJvZHVjdGlvbi5Vc2VyI3Bob25lAAAAARAAAQIDBAUGBwgJCgsMDQ4PAACrQ-wBqgjsVKadlvEtgA_g",
+        "b": "1OCsE03PaR-4jOCtTn7q5Md8FU4d-JK_qZauh3q1U8Y"
+      }
+    }
+  },
+  {
+    "id": "doc-aes-256-cbc-006",
+    "algorithm": "AES_256_CBC",
+    "algorithmId": 2,
+    "input": {
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "hmacKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "plaintext": "13900139000",
+      "namespace": "default.default.User#phone",
+      "fieldName": "phone",
+      "dekVersion": 2,
+      "kid": "v2-kid",
+      "ivHex": "000102030405060708090a0b0c0d0e0f"
+    },
+    "expected": {
+      "wireFormatBase64url": "AQIAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAAhAAAQIDBAUGBwgJCgsMDQ4PAADiWfBqKykmchFJmMpRWqMT",
+      "blindIndexBase64url": "qG1qYE-RFjV7pE1N_YL-poWYGqhzUOQjrVHLe5ebNTQ",
+      "document": {
+        "_e": 1,
+        "_t": "STR",
+        "_k": "v2-kid",
+        "c": "AQIAGmRlZmF1bHQuZGVmYXVsdC5Vc2VyI3Bob25lAAAAAhAAAQIDBAUGBwgJCgsMDQ4PAADiWfBqKykmchFJmMpRWqMT",
+        "b": "qG1qYE-RFjV7pE1N_YL-poWYGqhzUOQjrVHLe5ebNTQ"
+      }
+    }
+  },
+  {
+    "id": "doc-aes-256-cbc-007",
+    "algorithm": "AES_256_CBC",
+    "algorithmId": 2,
+    "input": {
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "hmacKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "plaintextHex": "0000001e",
+      "plaintextDisplay": "30 (Integer)",
+      "namespace": "default.default.User#age",
+      "fieldName": "age",
+      "dekVersion": 1,
+      "kid": "v1-kid",
+      "ivHex": "000102030405060708090a0b0c0d0e0f"
+    },
+    "expected": {
+      "wireFormatBase64url": "AQIAGGRlZmF1bHQuZGVmYXVsdC5Vc2VyI2FnZQAAAAEQAAECAwQFBgcICQoLDA0ODwAAlGBqZR2oTBjEmIIPi30LpA",
+      "blindIndexBase64url": "-64nMkJBtPt8lBMLZ2kY5iduQIX8Z1q2P3nIkUZLVBE",
+      "document": {
+        "_e": 1,
+        "_t": "INT",
+        "_k": "v1-kid",
+        "c": "AQIAGGRlZmF1bHQuZGVmYXVsdC5Vc2VyI2FnZQAAAAEQAAECAwQFBgcICQoLDA0ODwAAlGBqZR2oTBjEmIIPi30LpA",
+        "b": "-64nMkJBtPt8lBMLZ2kY5iduQIX8Z1q2P3nIkUZLVBE"
+      }
+    }
+  }
+]
