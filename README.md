@@ -26,8 +26,12 @@ Deep docs are in [docs](docs/):
 - [Configuration](docs/configuration.md)
 - [Encryption Behavior (nested/collection/mode/types)](docs/encryption-behavior.md)
 - [Architecture, Envelope, Storage Format, Rotation](docs/architecture.md)
+- [Key Lifecycle (rotation, DEK re-encryption, CMK migration)](docs/key-lifecycle.md)
+- [Multi-Tenancy (namespace model, patterns, cross-language)](docs/multi-tenancy.md)
+- [Observability (events, metrics, health)](docs/observability.md)
 - [CMK Provider SPI](docs/spi-cmk-provider.md)
 - [Migration: introduce LCL to existing plaintext data](docs/migration/introduce-lcl-to-existing-plaintext-data.md)
+- [Migration: cross-CMK provider re-wrap](docs/migration/cross-cmk-provider-migration.md)
 - [Wiki](https://github.com/emmansun/LightCrypto-Link/wiki)
 
 ## Features
@@ -38,9 +42,13 @@ Deep docs are in [docs](docs/):
 - Nested object and collection/map encryption
 - Whole-object mode for container confidentiality
 - Per-namespace multi-DEK vault with versioned `kid` and Wire Format V1 self-describing blobs
+- **DEK re-encryption engine**: batch scan, per-field kid-based CAS, checkpoint resumability, dry-run
+- **CMK provider migration**: cross-provider re-wrap with three-level target resolution
 - Pluggable storage adapters (MongoDB adapter included; SPI for JDBC, Elasticsearch, etc.)
 - Pluggable CMK providers (local, Azure Key Vault, Alibaba Cloud KMS)
+- Structured error taxonomy with precise exception hierarchy
 - **Observability**: structured events, Micrometer metrics, Spring Boot Actuator health indicator
+- **Bootstrap diagnostics**: KAT, canary roundtrip, staged health checks
 
 ## Quick Start
 
@@ -188,49 +196,37 @@ Use `ProgrammaticCryptoService` for DTO/message encryption, migration scripts,
 or manual decryption of raw query results.
 
 ```java
-Document encrypted = programmaticCryptoService.encryptValue("13800138000", User.class);
+// Namespace-based (explicit — recommended for multi-tenant scenarios)
+Object encrypted = programmaticCryptoService.encryptValue("13800138000", "acme.production.User#phone");
 Object plain = programmaticCryptoService.decryptValue(encrypted);
+
+// Class-based (resolves namespace from global tenant/realm config)
+Object encrypted2 = programmaticCryptoService.encryptValue("13800138000", User.class);
 ```
 
-## Rotation
-
-Key rotation API is:
+## Rotation & Re-Encryption
 
 ```java
+// Rotate DEK (new version becomes active, old versions retained for decryption)
 keyVaultService.rotateDek("default.default.User#phone");
+
+// Batch re-encrypt existing documents to active DEK version
+ReEncryptResult result = dekReEncryptionService.reEncrypt(User.class,
+        ReEncryptOptions.forEntity(User.class).withBatchSize(500));
 ```
 
-For behavior details, see [docs/architecture.md](docs/architecture.md).
+For behavior details, see [docs/key-lifecycle.md](docs/key-lifecycle.md).
 
 ## Observability
 
-LCL provides built-in observability features (enabled by default):
+LCL provides built-in observability (enabled by default): structured events via `EventBus`, Micrometer timers/counters, and a four-state Actuator `HealthIndicator`.
 
-### Structured Events
-
-All crypto operations emit structured events via `EventBus`:
-
-```json
-{"event":"lcl.crypto.encrypt.completed","tier":"L2","result":"success","algorithm":"AES_256_GCM","durationMicros":240}
-```
-
-### Micrometer Metrics
-
-When Micrometer is on the classpath, LCL registers timers and counters:
-
-- `lcl.crypto.encrypt.duration` / `lcl.crypto.decrypt.duration`
-- `lcl.rotation.duration` / `lcl.keyvault.load.duration`
-- `lcl.crypto.encrypt.total` / `lcl.crypto.decrypt.total`
-
-### Health Indicator
-
-When Spring Boot Actuator is on the classpath, LCL registers a `HealthIndicator`:
-
-- **UP** — all components healthy
-- **OUT_OF_SERVICE** — degraded
-- **DOWN** — fatal error
-
-### Configuration
+| LclHealthStatus | Spring Status | Meaning |
+|-----------------|---------------|--------|
+| READY | UP | All components healthy |
+| STARTING | UNKNOWN | Bootstrap in progress |
+| DEGRADED | OUT_OF_SERVICE | Non-critical component failed |
+| FAILED | DOWN | Fatal error |
 
 ```yaml
 lightcrypto:
@@ -241,7 +237,7 @@ lightcrypto:
     health.enabled: true   # Actuator health
 ```
 
-See [docs/configuration.md](docs/configuration.md) for full reference.
+See [docs/observability.md](docs/observability.md) for the full event catalog, metrics reference, and health model.
 
 ## Bootstrap Diagnostics
 
@@ -325,6 +321,7 @@ LightCrypto-Link/
 |  |- azure-keyvault/
 |  |- alibaba-kms/
 |  `- observability/
+|- lcl-benchmarks/                       # JMH performance benchmarks with baseline comparison
 |- vectors/                              # Golden test vectors (cross-language verification)
 `- docs/
 ```
