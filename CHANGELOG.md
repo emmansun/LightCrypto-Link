@@ -4,6 +4,29 @@ All notable changes to LightCrypto-Link are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **DEK re-encryption engine** (`DekReEncryptionService`): batch scan, decrypt with old DEK, re-encrypt with active DEK, recompute blind index, checkpoint-based resumability, and event emission.
+- **Structured error taxonomy**: precise exception hierarchy (`PayloadCorruptionException`, `KeyResolutionException`, `SchemaDriftException`, etc.) replacing generic runtime exceptions.
+- **CMK migration runner**: three-level target provider resolution and same-provider dual-key re-wrap support.
+
+### Changed
+
+- **DEK re-encryption CAS strategy**: replaced document-level `updatedAt` concurrency token with per-field `_k` (kid) dot-notation filters. Zero business schema dependency; field-level precision; legacy blobs without `_k` fall back to `_id`-only filter.
+- `RawDocument` SPI: `concurrencyToken` field replaced by `fieldKids` (`Map<String, String>`).
+- `MongoDocumentRewriteStore`: removed `concurrencyField` constructor parameter; CAS filter now built from `fieldKids` map.
+
+### Documentation
+
+- Added **Observability Guide** (`docs/observability.md`): event catalog, EventBus implementations, Micrometer metrics, health model, configuration reference.
+- Added **Multi-Tenancy Guide** (`docs/multi-tenancy.md`): namespace model, three multi-tenancy patterns, cross-language compatibility, migration path.
+
+### Dependencies
+
+- Bump `github/codeql-action` from 4.37.3 to 4.37.4.
+
 ## [1.1.0] — 2026-07-29
 
 ### Added
@@ -89,5 +112,6 @@ LightCrypto-Link/
 - Micrometer (optional, metrics)
 - Spring Boot Actuator (optional, health + diagnostics endpoints)
 
+[Unreleased]: https://github.com/emmansun/LightCrypto-Link/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/emmansun/LightCrypto-Link/releases/tag/v1.1.0
 [1.0.0]: https://github.com/emmansun/LightCrypto-Link/releases/tag/v1.0.0
