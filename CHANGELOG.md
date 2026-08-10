@@ -6,11 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-10
+
 ### Added
 
 - **DEK re-encryption engine** (`DekReEncryptionService`): batch scan, decrypt with old DEK, re-encrypt with active DEK, recompute blind index, checkpoint-based resumability, and event emission.
 - **Structured error taxonomy**: precise exception hierarchy (`PayloadCorruptionException`, `KeyResolutionException`, `SchemaDriftException`, etc.) replacing generic runtime exceptions.
 - **CMK migration runner**: three-level target provider resolution and same-provider dual-key re-wrap support.
+- **Combined field-document Golden Vectors**: encryption + blind index combined vectors for cross-language verification across all four algorithms.
 
 ### Changed
 
@@ -112,6 +115,7 @@ LightCrypto-Link/
 - Micrometer (optional, metrics)
 - Spring Boot Actuator (optional, health + diagnostics endpoints)
 
-[Unreleased]: https://github.com/emmansun/LightCrypto-Link/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/emmansun/LightCrypto-Link/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/emmansun/LightCrypto-Link/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/emmansun/LightCrypto-Link/releases/tag/v1.1.0
 [1.0.0]: https://github.com/emmansun/LightCrypto-Link/releases/tag/v1.0.0
